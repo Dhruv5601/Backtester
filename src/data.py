@@ -1,7 +1,8 @@
 import yfinance as yf
+from datetime import date
 
 def download_data():
-    df = yf.download('SPY', period='10y', interval='1d')
+    df = yf.download('SPY', period='10y', interval='1d', auto_adjust=False)
     df.columns = df.columns.droplevel('Ticker')
     df.columns.name = None
     return df
@@ -9,6 +10,10 @@ def download_data():
 def validate_data(df):
     cols_list = ['Open','High','Low','Close','Volume']
     missing_list = []
+
+    today = date.today()
+    if df.index[-1].date() == today:
+        df.drop(index=today, inplace=True)
 
     if not set(cols_list).issubset(df.columns):    
         for i in cols_list:
@@ -30,25 +35,25 @@ def validate_data(df):
         indx = df.index[(df['High'] < df['Open'])]
         opn = df.loc[indx,'Open']
         high = df.loc[indx, 'High']
-        raise ValueError(f'Invalid High data at {len(indx)} instance/s\nFirst occurrence:- Date: {indx[0]} | High: {high[0]} | Open: {opn[0]}')
+        raise ValueError(f'Invalid High data at {len(indx)} instance/s\nFirst occurrence:- Date: {indx[0]} | High: {high.iloc[0]} | Open: {opn.iloc[0]}')
     
     elif (df['High'] < df['Close']).any():
         indx2 = df.index[(df['High'] < df['Close'])]
         close = df.loc[indx2,'Close']
         high2 = df.loc[indx2, 'High']
-        raise ValueError(f'Invalid High data at {len(indx2)} instance/s\nFirst occurrence:- Date: {indx2[0]} | High: {high2[0]} | Close {close[0]}')
+        raise ValueError(f'Invalid High data at {len(indx2)} instance/s\nFirst occurrence:- Date: {indx2[0]} | High: {high2.iloc[0]} | Close {close.iloc[0]}')
 
     elif (df['Low'] > df['Open']).any():  
         indx3 = df.index[(df['Low'] > df['Open'])]
         opn2 = df.loc[indx3,'Open']
         low = df.loc[indx3, 'Low']
-        raise ValueError(f'Invalid Low data at {len(indx3)} instance/s\nFirst occurrence:- Date: {indx3[0]} | Low: {low[0]} | Open: {opn2[0]}')
+        raise ValueError(f'Invalid Low data at {len(indx3)} instance/s\nFirst occurrence:- Date: {indx3[0]} | Low: {low.iloc[0]} | Open: {opn2.iloc[0]}')
 
     elif (df['Low'] > df['Close']).any():  
         indx4 = df.index[(df['Low'] > df['Close'])]
         close2 = df.loc[indx4,'Close']
         low2 = df.loc[indx4, 'Low']
-        raise ValueError(f'Invalid Low data at {len(indx4)} instance/s\nFirst occurrence:- Date: {indx4[0]} | Low: {low2[0]} | Close: {close2[0]}')
+        raise ValueError(f'Invalid Low data at {len(indx4)} instance/s\nFirst occurrence:- Date: {indx4[0]} | Low: {low2.iloc[0]} | Close: {close2.iloc[0]}')
 
     elif  (df[['Close','High','Low','Open']] <= 0).any().any():
         neg_df = df.loc[(df[['Close','High','Low','Open']] <= 0).any(axis=1)].copy()
@@ -70,5 +75,4 @@ if __name__ == "__main__":
     df = download_data()
     validate_data(df)
     save_data(df, "data/SPY.csv")
-
 
