@@ -1,8 +1,8 @@
 import yfinance as yf
 from datetime import date
 
-def download_data():
-    df = yf.download('SPY', period='10y', interval='1d', auto_adjust=False)
+def download_data(period='10y'):
+    df = yf.download('SPY', period=period, interval='1d', auto_adjust=False)
     df.columns = df.columns.droplevel('Ticker')
     df.columns.name = None
     return df

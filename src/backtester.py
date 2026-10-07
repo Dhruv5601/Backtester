@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-df = pd.read_csv(r'C:\Users\dodhr\Desktop\R2Q Python\Backtester\data\SPY.csv', index_col=0, parse_dates=True)
 
 def run_backtest(df, initial_capital=100000):
 
@@ -9,6 +8,8 @@ def run_backtest(df, initial_capital=100000):
 
     exit_prices = np.array([])
     entry_prices = np.array([])
+    entry_dates = np.array([])
+    exit_dates = np.array([])
 
     df['Strategy_Return'] = 0.0
     df['Market_Return'] = ((df['Close'] - df['Close'].shift(1))/df['Close'].shift(1))
@@ -28,11 +29,13 @@ def run_backtest(df, initial_capital=100000):
             if i == len(df) - 1:
                 continue
             entry_prices = np.append(entry_prices,df.iloc[i + 1]['Execution'])
+            entry_dates = np.append(entry_dates, df.index[i + 1])
 
         elif signal == -1 and df.loc[index, 'Position'] == 1:
             if i == len(df) - 1:
                 continue
             exit_prices = np.append(exit_prices,df.iloc[i + 1]['Execution'])
+            exit_dates = np.append(exit_dates,  df.index[i + 1])
 
     df.loc[entry_day, 'Strategy_Return'] = (df['Close'] - df['Open']) / df['Open']
     df.loc[exit_day, 'Strategy_Return'] = (df['Open'] - df['Close'].shift(1)) / df['Close'].shift(1)
@@ -44,6 +47,7 @@ def run_backtest(df, initial_capital=100000):
     if len(entry_prices) > len(exit_prices):
         open_entry = entry_prices[-1]
         entry_prices = entry_prices[:-1]
+        entry_dates = entry_dates[:-1]
     elif len(entry_prices) < len(exit_prices):
         raise ValueError("More exits than entries detected")
     gross_trade_returns = (exit_prices - entry_prices) / entry_prices
@@ -55,10 +59,19 @@ def run_backtest(df, initial_capital=100000):
     df['Market_Return'] = df['Market_Return'].fillna(0)
     df['Benchmark_Return'] = df['Market_Return']
     df['Benchmark_Equity'] = initial_capital * (1+ df['Benchmark_Return']).cumprod()
-    
-    first_entry = entry_prices[0]
-    first_exit = exit_prices[0]
 
-    return df
+
+    show_trades = {}
+
+    show_trades.update({'Entry_date':entry_dates})
+    show_trades.update({f'Entry_price':entry_prices})
+    show_trades.update({f'Exit_price':exit_prices})
+    show_trades.update({f'Gross_return':gross_trade_returns})
+    show_trades.update({f'Net_return':net_trade_returns})
+    show_trades.update({f'Exit_date':exit_dates})
+
+    trades_df = pd.DataFrame(show_trades)
+    trades_df.index.name = 'Trade_no'
+    return df, trades_df
 
 

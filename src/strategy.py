@@ -1,7 +1,3 @@
-import pandas as pd
-
-df = pd.read_csv(r"C:\Users\dodhr\Desktop\R2Q Python\Backtester\data\SPY.csv", index_col=0, parse_dates=True)
-
 def calculate_moving_averages(df):
     df['MA_20'] = df['Close'].rolling(window=20).mean()
     df['MA_50'] = df['Close'].rolling(window=50).mean()
