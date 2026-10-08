@@ -5,7 +5,7 @@ from src import performance
 from src import visualization
 from src import data
 
-def run_backtest(period='10y', initial_capital=100000, trade_start_date=None, trade_end_date=None):
+def run_backtest(period='10y', initial_capital=100000):
 
     df = data.download_data(period=period)
     data.validate_data(df)
