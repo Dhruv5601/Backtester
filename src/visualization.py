@@ -96,3 +96,22 @@ def plot_trades(df, trades_df, start_date=None, end_date=None):
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.show()
+
+def get_equity_curve_data(df):
+    return {
+        'dates': df.index.strftime('%Y-%m-%d').tolist(),
+        'strategy_equity': df['Equity'].tolist(),
+        'benchmark_equity': df['Benchmark_Equity'].tolist()
+    }
+
+
+def get_drawdown_data(df):
+    strategy_drawdown = ((df['Equity'] / df['Equity'].cummax()) - 1) * 100
+
+    benchmark_drawdown = ((df['Benchmark_Equity'] / df['Benchmark_Equity'].cummax()) - 1) * 100
+
+    return {
+        'dates': df.index.strftime('%Y-%m-%d').tolist(),
+        'strategy_drawdown': strategy_drawdown.tolist(),
+        'benchmark_drawdown': benchmark_drawdown.tolist()
+    }

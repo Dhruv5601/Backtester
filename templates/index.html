@@ -1,0 +1,2439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quant Backtester</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #07111b;
+            color: #e5edf7;
+        }
+
+        .app { min-height: 100vh; }
+
+        .topbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            background: #08131e;
+            border-bottom: 1px solid #1a2b3b;
+            z-index: 200;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 13px;
+        }
+
+        .brand-icon {
+            width: 42px;
+            height: 42px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            gap: 4px;
+        }
+
+        .brand-icon span {
+            display: block;
+            width: 6px;
+            background: #3b82f6;
+            border-radius: 1px 1px 0 0;
+        }
+
+        .brand-icon span:nth-child(1) { height: 13px; }
+        .brand-icon span:nth-child(2) { height: 23px; }
+        .brand-icon span:nth-child(3) { height: 34px; }
+
+        .brand-text,
+        .profile-text {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+        }
+
+        .brand-name {
+            font-size: 20px;
+            line-height: 22px;
+            font-weight: 700;
+            color: #f8fafc;
+            letter-spacing: -0.3px;
+        }
+
+        .brand-tagline,
+        .profile-version {
+            font-size: 12px;
+            color: #71859a;
+        }
+
+        .topbar-right {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+        }
+
+        .theme-toggle {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            color: #b3c0ce;
+            font-size: 15px;
+        }
+
+        .toggle {
+            width: 40px;
+            height: 23px;
+            position: relative;
+            border-radius: 20px;
+            border: 1px solid #354759;
+            background: #1c2a38;
+        }
+
+        .toggle::after {
+            content: "";
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background: #65778a;
+        }
+
+        .profile {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding-left: 16px;
+            border-left: 1px solid #1a2b3b;
+        }
+
+        .profile-circle {
+            width: 38px;
+            height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background: #172534;
+            color: #dbe5ef;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .profile-name {
+            font-size: 12px;
+            color: #e5edf7;
+        }
+
+        .profile-version { font-size: 11px; }
+
+        .sidebar {
+            position: fixed;
+            top: 60px;
+            left: 0;
+            bottom: 0;
+            width: 194px;
+            background: linear-gradient(180deg, #08131e 0%, #091521 100%);
+            border-right: 1px solid #1a2b3b;
+            padding: 24px 14px;
+            z-index: 100;
+        }
+
+        .nav-section { margin-bottom: 30px; }
+
+        .nav-title {
+            padding-left: 12px;
+            margin-bottom: 10px;
+            font-size: 10px;
+            font-weight: 700;
+            color: #5e748a;
+            letter-spacing: 0.09em;
+        }
+
+        .nav-item {
+            height: 42px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 0 12px;
+            margin-bottom: 3px;
+            border-radius: 6px;
+            border-left: 2px solid transparent;
+            color: #9aafc3;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background 0.15s ease, color 0.15s ease;
+        }
+
+        .nav-icon {
+            width: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #91a6ba;
+            font-size: 15px;
+        }
+
+        .nav-item:hover {
+            background: #102238;
+            color: #e5edf7;
+        }
+
+        .nav-item.active {
+            background: #12283f;
+            border-left-color: #3185ff;
+            color: #f3f7fb;
+        }
+
+        .nav-item.active .nav-icon { color: #63a5ff; }
+
+        .sidebar-bottom {
+            position: absolute;
+            left: 14px;
+            right: 14px;
+            bottom: 18px;
+            padding-top: 16px;
+            border-top: 1px solid #172938;
+        }
+
+        .main {
+            margin-left: 194px;
+            padding: 74px 18px 30px;
+            min-height: 100vh;
+            background:
+                radial-gradient(circle at 75% 0%, rgba(32, 91, 145, 0.07), transparent 34%),
+                #07111b;
+        }
+
+        .main-inner {
+            width: 100%;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .page-header { display: none; }
+
+        .config-card,
+        .results-card {
+            background: linear-gradient(145deg, rgba(15, 29, 42, 0.96), rgba(9, 21, 32, 0.98));
+            border: 1px solid #1d3447;
+            border-radius: 7px;
+            padding: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16);
+        }
+
+        .config-card { margin-bottom: 14px; }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 14px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #1b3041;
+        }
+
+        .card-title,
+        .results-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 17px;
+            font-weight: 650;
+            color: #eef4fa;
+        }
+
+        .card-title::before {
+            content: "☷";
+            font-size: 22px;
+            font-weight: 400;
+            color: #b7c6d5;
+            transform: rotate(90deg);
+        }
+
+        .card-description,
+        .results-description { display: none; }
+
+        .config-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1.65fr;
+            gap: 16px;
+        }
+
+        .field {
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+            min-width: 0;
+        }
+
+        .field label {
+            font-size: 12px;
+            color: #8fa7bd;
+        }
+
+        select,
+        input {
+            width: 100%;
+            height: 39px;
+            background: #091725;
+            border: 1px solid #2b4358;
+            border-radius: 5px;
+            color: #e4ebf3;
+            padding: 0 11px;
+            font-family: inherit;
+            font-size: 13px;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        select:hover,
+        input:hover { border-color: #38536a; }
+
+        select:focus,
+        input:focus {
+            outline: none;
+            border-color: #3987ee;
+            box-shadow: 0 0 0 1px rgba(57, 135, 238, 0.14);
+        }
+
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(1);
+            opacity: 1;
+            cursor: pointer;
+        }
+
+        input[type="date"]::-webkit-datetime-edit {
+            color: #e4ebf3;
+        }
+
+        .capital-input {
+            position: relative;
+            display: flex;
+            height: 39px;
+        }
+
+        .capital-input input {
+            height: 39px;
+            padding-right: 35px;
+        }
+
+        .capital-controls {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 34px;
+            height: 39px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .capital-controls button {
+            flex: 1;
+            border: 0;
+            border-left: 1px solid #2b4358;
+            background: #091725;
+            color: #8097ac;
+            font-size: 9px;
+            cursor: pointer;
+        }
+
+        .capital-controls button:first-child {
+            border-bottom: 1px solid #2b4358;
+            border-radius: 0 5px 0 0;
+        }
+
+        .capital-controls button:last-child { border-radius: 0 0 5px 0; }
+
+        .capital-controls button:hover {
+            background: #112337;
+            color: #dce6ef;
+        }
+
+        .capital-input input::-webkit-outer-spin-button,
+        .capital-input input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .capital-input input { -moz-appearance: textfield; }
+
+        .run-container {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 13px;
+        }
+
+        .run-button {
+            min-width: 177px;
+            height: 42px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
+            background: #347fe9;
+            color: #fff;
+            border: 1px solid #428cf1;
+            border-radius: 5px;
+            padding: 0 20px;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 5px 16px rgba(37, 99, 235, 0.16);
+            transition: background 0.15s ease, opacity 0.15s ease;
+        }
+
+        .run-button:hover { background: #286fd5; }
+
+        .run-button:disabled {
+            opacity: 0.65;
+            cursor: wait;
+        }
+
+        .results-section {
+            display: none;
+            margin-top: 0;
+        }
+
+        .results-section.visible { display: block; }
+
+        .results-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 13px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #1b3041;
+        }
+
+        .results-title::before {
+            content: "▥";
+            font-size: 20px;
+            color: #c2cfdb;
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .metric {
+            min-width: 0;
+            min-height: 104px;
+            background: #0a1725;
+            border: 1px solid #1c3347;
+            border-radius: 6px;
+            padding: 12px;
+            transition: border-color 0.15s ease, background 0.15s ease;
+        }
+
+        .metric:hover {
+            background: #0c1a2a;
+            border-color: #29465d;
+        }
+
+        .metric-label {
+            font-size: 11px;
+            color: #9aafc3;
+            margin-bottom: 8px;
+            white-space: nowrap;
+        }
+
+        .metric-values {
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+        }
+
+        .metric-column { min-width: 0; }
+        .metric-column-label { display: none; }
+
+        .metric-value {
+            font-size: 19px;
+            line-height: 22px;
+            font-weight: 650;
+            white-space: nowrap;
+            color: #edf3f8;
+        }
+
+        .metric-value.strategy { color: #5ee19a; }
+
+        .metric-value.benchmark {
+            font-size: 11px;
+            line-height: 15px;
+            font-weight: 500;
+            color: #b1c0cf;
+        }
+
+        /* Dashboard layout */
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+            margin-top: 14px;
+        }
+
+        .dashboard-card {
+            min-width: 0;
+            background: linear-gradient(145deg, rgba(15, 29, 42, 0.96), rgba(9, 21, 32, 0.98));
+            border: 1px solid #1d3447;
+            border-radius: 7px;
+            padding: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+        }
+
+        .dashboard-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 14px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #1b3041;
+        }
+
+        .dashboard-card-title {
+            font-size: 15px;
+            font-weight: 650;
+            color: #eef4fa;
+        }
+
+        .dashboard-card-subtitle {
+            margin-top: 5px;
+            font-size: 11px;
+            color: #71879c;
+        }
+
+        /* Open position */
+
+        .open-position-card {
+            display: none;
+            margin-top: 14px;
+            background: linear-gradient(145deg, rgba(15, 29, 42, 0.96), rgba(9, 21, 32, 0.98));
+            border: 1px solid #1d3447;
+            border-radius: 7px;
+            padding: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+        }
+
+        .open-position-card.visible { display: block; }
+
+        .open-position-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .open-position-stat {
+            min-width: 0;
+            padding: 12px;
+            background: #0a1725;
+            border: 1px solid #1c3347;
+            border-radius: 6px;
+        }
+
+        .open-position-label {
+            font-size: 11px;
+            color: #8fa7bd;
+            margin-bottom: 7px;
+        }
+
+        .open-position-value {
+            font-size: 18px;
+            line-height: 1.35;
+            font-weight: 650;
+            color: #edf3f8;
+            overflow-wrap: anywhere;
+        }
+
+        .open-position-value.positive { color: #5ee19a; }
+        .open-position-value.negative { color: #fb7185; }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+
+        .trade-analysis-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .trade-stat {
+            min-width: 0;
+            padding: 12px;
+            background: #0a1725;
+            border: 1px solid #1c3347;
+            border-radius: 6px;
+        }
+
+        .trade-stat-label {
+            font-size: 11px;
+            color: #8fa7bd;
+            margin-bottom: 7px;
+        }
+
+        .trade-stat-value {
+            font-size: 18px;
+            line-height: 1.35;
+            font-weight: 650;
+            color: #edf3f8;
+            overflow-wrap: anywhere;
+        }
+
+        .trade-stat-value.positive { color: #5ee19a; }
+        .trade-stat-value.negative { color: #fb7185; }
+
+        .table-wrapper {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        .trades-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .trades-table th {
+            padding: 11px 10px;
+            text-align: left;
+            color: #8fa7bd;
+            font-weight: 600;
+            background: #0a1725;
+            border-bottom: 1px solid #263c50;
+        }
+
+        .trades-table td {
+            padding: 11px 10px;
+            color: #d5e0ea;
+            border-bottom: 1px solid #172b3c;
+        }
+
+        .trades-table tbody tr:hover { background: #102238; }
+
+        .trades-table .positive { color: #5ee19a; }
+        .trades-table .negative { color: #fb7185; }
+
+        .empty-state {
+            padding: 24px 12px;
+            text-align: center;
+            font-size: 12px;
+            color: #71879c;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(2, 8, 16, 0.78);
+            z-index: 500;
+            backdrop-filter: blur(3px);
+        }
+
+        .modal-overlay.active { display: flex; }
+
+        .date-modal {
+            width: 440px;
+            max-width: calc(100% - 32px);
+            background: linear-gradient(145deg, #101e2b, #091521);
+            border: 1px solid #2b4358;
+            border-radius: 7px;
+            padding: 22px;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .date-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .date-modal-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #f1f5f9;
+        }
+
+        .close-button {
+            width: 30px;
+            height: 30px;
+            border: none;
+            background: transparent;
+            color: #71879c;
+            font-size: 22px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        .close-button:hover {
+            background: #13263a;
+            color: #e5edf7;
+        }
+
+        .date-fields {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 13px;
+        }
+
+        .date-field {
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+            min-width: 0;
+        }
+
+        .date-field label {
+            font-size: 11px;
+            color: #8ea6bd;
+        }
+
+        .date-hint {
+            margin-top: 13px;
+            font-size: 11px;
+            line-height: 1.5;
+            color: #607993;
+        }
+
+        .date-error {
+            display: none;
+            margin-top: 11px;
+            padding: 9px 10px;
+            border-radius: 5px;
+            background: rgba(239, 68, 68, 0.08);
+            border: 1px solid rgba(239, 68, 68, 0.25);
+            color: #f87171;
+            font-size: 11px;
+        }
+
+        .date-error.active { display: block; }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 9px;
+            margin-top: 20px;
+        }
+
+        .secondary-button,
+        .primary-button {
+            height: 35px;
+            padding: 0 14px;
+            border-radius: 5px;
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .secondary-button {
+            background: #091725;
+            border: 1px solid #2b4358;
+            color: #8fa6bb;
+        }
+
+        .secondary-button:hover {
+            background: #13263a;
+            color: #e5edf7;
+        }
+
+        .primary-button {
+            background: #347fe9;
+            border: 1px solid #428cf1;
+            color: #fff;
+        }
+
+        .primary-button:hover { background: #286fd5; }
+
+        @media (max-width: 1250px) {
+            .results-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 1100px) {
+            .config-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 850px) {
+            .sidebar { width: 170px; }
+            .main { margin-left: 170px; }
+
+            .profile-text,
+            .theme-toggle { display: none; }
+
+            .results-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .open-position-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 650px) {
+            .topbar { padding: 0 12px; }
+            .brand-name { font-size: 17px; }
+            .brand-tagline { display: none; }
+            .sidebar { display: none; }
+
+            .main {
+                margin-left: 0;
+                padding-left: 10px;
+                padding-right: 10px;
+            }
+
+            .config-grid,
+            .results-grid,
+            .date-fields {
+                grid-template-columns: 1fr;
+            }
+
+            .trade-analysis-grid { grid-template-columns: 1fr 1fr; }
+            .open-position-grid { grid-template-columns: 1fr 1fr; }
+            .chart-container { height: 250px; }
+        }
+    </style>
+</head>
+
+<body>
+<div class="app">
+    <header class="topbar">
+        <div class="brand">
+            <div class="brand-icon">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+            <div class="brand-text">
+                <div class="brand-name">Quant Backtester</div>
+                <div class="brand-tagline">Research. Backtest. Analyze.</div>
+            </div>
+        </div>
+
+        <div class="topbar-right">
+            <div class="theme-toggle">
+                ☼
+                <div class="toggle"></div>
+            </div>
+            <div class="profile">
+                <div class="profile-circle">Q</div>
+                <div class="profile-text">
+                    <div class="profile-name">Quant Backtester</div>
+                    <div class="profile-version">v1.0</div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <aside class="sidebar">
+        <div class="nav-section">
+            <div class="nav-title">RESEARCH</div>
+            <div class="nav-item active">
+                <span class="nav-icon">⌁</span>
+                <span>Backtest</span>
+            </div>
+            <div class="nav-item" data-scroll="results-section">
+                <span class="nav-icon">▧</span>
+                <span>Results</span>
+            </div>
+            <div class="nav-item" data-scroll="trade-analysis-card">
+                <span class="nav-icon">↔</span>
+                <span>Trades</span>
+            </div>
+            <div class="nav-item" data-scroll="equity-card">
+                <span class="nav-icon">▤</span>
+                <span>Reports</span>
+            </div>
+        </div>
+
+        <div class="sidebar-bottom">
+            <div class="nav-item">
+                <span class="nav-icon">⚙</span>
+                <span>Settings</span>
+            </div>
+        </div>
+    </aside>
+
+    <main class="main">
+        <div class="main-inner">
+            <div class="page-header">
+                <div>
+                    <div class="page-title">Backtest Research</div>
+                    <div class="page-subtitle">Strategy analysis and portfolio performance</div>
+                </div>
+                <div class="status" id="status">
+                    <div class="status-dot"></div>
+                    <span id="status-text">Ready</span>
+                </div>
+            </div>
+
+            <section class="config-card">
+                <div class="card-header">
+                    <div class="card-title">Backtest Configuration</div>
+                    <div class="card-description">
+                        Configure the research universe and simulation parameters.
+                    </div>
+                </div>
+
+                <div class="config-grid">
+                    <div class="field">
+                        <label for="asset">Asset</label>
+                        <select id="asset" name="asset">
+                            <option value="SPY">SPY</option>
+                            <option value="GOLD">GOLD</option>
+                        </select>
+                    </div>
+
+                    <div class="field">
+                        <label for="period">Backtest Period</label>
+                        <select id="period" name="period">
+                            <option value="1y">1 Year</option>
+                            <option value="3y">3 Years</option>
+                            <option value="5y" selected>5 Years</option>
+                            <option value="10y">10 Years</option>
+                            <option value="max">Max Available</option>
+                            <option value="custom">Custom Range...</option>
+                        </select>
+                    </div>
+
+                    <div class="field">
+                        <label for="capital">Initial Capital</label>
+                        <div class="capital-input">
+                            <input type="number" id="capital" name="capital" value="100000" min="1000" step="1000">
+                            <div class="capital-controls">
+                                <button type="button" id="capital-up" aria-label="Increase initial capital">▲</button>
+                                <button type="button" id="capital-down" aria-label="Decrease initial capital">▼</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label for="trade-range">Trade Chart Range</label>
+                        <select id="trade-range" name="trade-range">
+                            <option value="1y">Last 1 Year</option>
+                            <option value="3y" selected>Last 3 Years ★ Recommended</option>
+                            <option value="5y">Last 5 Years</option>
+                            <option value="10y">Last 10 Years</option>
+                            <option value="full">Full Backtest</option>
+                            <option value="custom">Custom Range...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="run-container">
+                    <button type="button" class="run-button" id="run-backtest">
+                        ▶ Run Backtest
+                    </button>
+                </div>
+            </section>
+
+            <section class="results-section" id="results-section">
+                <div class="results-card">
+                    <div class="results-header">
+                        <div>
+                            <div class="results-title">Backtest Results</div>
+                            <div class="results-description">
+                                Strategy performance compared with the benchmark.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="results-grid">
+                        <div class="metric">
+                            <div class="metric-label">Total Return</div>
+                            <div class="metric-values">
+                                <div class="metric-column">
+                                    <div class="metric-column-label">Strategy</div>
+                                    <div class="metric-value strategy" id="strategy-total-return">—</div>
+                                </div>
+                                <div class="metric-column">
+                                    <div class="metric-column-label">Benchmark</div>
+                                    <div class="metric-value benchmark" id="benchmark-total-return">Benchmark: —</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="metric">
+                            <div class="metric-label">CAGR</div>
+                            <div class="metric-values">
+                                <div class="metric-column">
+                                    <div class="metric-column-label">Strategy</div>
+                                    <div class="metric-value strategy" id="strategy-cagr">—</div>
+                                </div>
+                                <div class="metric-column">
+                                    <div class="metric-column-label">Benchmark</div>
+                                    <div class="metric-value benchmark" id="benchmark-cagr">Benchmark: —</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="metric">
+                            <div class="metric-label">Volatility</div>
+                            <div class="metric-values">
+                                <div class="metric-column">
+                                    <div class="metric-column-label">Strategy</div>
+                                    <div class="metric-value strategy" id="strategy-volatility">—</div>
+                                </div>
+                                <div class="metric-column">
+                                    <div class="metric-column-label">Benchmark</div>
+                                    <div class="metric-value benchmark" id="benchmark-volatility">Benchmark: —</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="metric">
+                            <div class="metric-label">Max Drawdown</div>
+                            <div class="metric-values">
+                                <div class="metric-column">
+                                    <div class="metric-column-label">Strategy</div>
+                                    <div class="metric-value strategy" id="strategy-max-drawdown">—</div>
+                                </div>
+                                <div class="metric-column">
+                                    <div class="metric-column-label">Benchmark</div>
+                                    <div class="metric-value benchmark" id="benchmark-max-drawdown">Benchmark: —</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="metric">
+                            <div class="metric-label">Sharpe Ratio</div>
+                            <div class="metric-values">
+                                <div class="metric-column">
+                                    <div class="metric-column-label">Strategy</div>
+                                    <div class="metric-value strategy" id="strategy-sharpe">—</div>
+                                </div>
+                                <div class="metric-column">
+                                    <div class="metric-column-label">Benchmark</div>
+                                    <div class="metric-value benchmark" id="benchmark-sharpe">Benchmark: —</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="metric">
+                            <div class="metric-label">Sortino Ratio</div>
+                            <div class="metric-values">
+                                <div class="metric-column">
+                                    <div class="metric-column-label">Strategy</div>
+                                    <div class="metric-value strategy" id="strategy-sortino">—</div>
+                                </div>
+                                <div class="metric-column">
+                                    <div class="metric-column-label">Benchmark</div>
+                                    <div class="metric-value benchmark" id="benchmark-sortino">Benchmark: —</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Open Position: separate from completed-trade statistics -->
+                <section class="open-position-card" id="open-position-card">
+                    <div class="dashboard-card-header">
+                        <div>
+                            <div class="dashboard-card-title">Open Position</div>
+                            <div class="dashboard-card-subtitle">
+                                Unrealized position details; excluded from completed-trade statistics
+                            </div>
+                        </div>
+                    </div>
+                    <div class="open-position-grid" id="open-position-grid"></div>
+                </section>
+
+                <div class="dashboard-grid">
+                    <section class="dashboard-card" id="equity-card">
+                        <div class="dashboard-card-header">
+                            <div>
+                                <div class="dashboard-card-title">Equity Curve</div>
+                                <div class="dashboard-card-subtitle">Strategy vs. SPY buy-and-hold benchmark</div>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="equity-chart"></canvas>
+                        </div>
+                    </section>
+
+                    <section class="dashboard-card" id="drawdown-card">
+                        <div class="dashboard-card-header">
+                            <div>
+                                <div class="dashboard-card-title">Drawdown</div>
+                                <div class="dashboard-card-subtitle">Percentage decline from each equity peak</div>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="drawdown-chart"></canvas>
+                        </div>
+                    </section>
+
+                    <section class="dashboard-card" id="trade-analysis-card">
+                        <div class="dashboard-card-header">
+                            <div>
+                                <div class="dashboard-card-title">Trade Analysis</div>
+                                <div class="dashboard-card-subtitle">Statistics calculated from completed strategy trades</div>
+                            </div>
+                        </div>
+                        <div class="trade-analysis-grid" id="trade-analysis-grid">
+                            <div class="empty-state">Run a backtest to view trade statistics.</div>
+                        </div>
+                    </section>
+
+                    <section class="dashboard-card" id="recent-trades-card">
+                        <div class="dashboard-card-header">
+                            <div>
+                                <div class="dashboard-card-title">Recent Trades</div>
+                                <div class="dashboard-card-subtitle">Latest completed trades from the selected backtest</div>
+                            </div>
+                        </div>
+                        <div class="table-wrapper">
+                            <table class="trades-table">
+                                <thead id="recent-trades-head"></thead>
+                                <tbody id="recent-trades-body">
+                                    <tr>
+                                        <td class="empty-state">Run a backtest to view recent trades.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+            </section>
+        </div>
+    </main>
+</div>
+
+<div class="modal-overlay" id="backtest-date-modal">
+    <div class="date-modal">
+        <div class="date-modal-header">
+            <div class="date-modal-title">Custom Backtest Range</div>
+            <button type="button" class="close-button" id="close-backtest-modal">×</button>
+        </div>
+
+        <div class="date-fields">
+            <div class="date-field">
+                <label for="backtest-start-date">Start Date</label>
+                <input type="date" id="backtest-start-date">
+            </div>
+            <div class="date-field">
+                <label for="backtest-end-date">End Date</label>
+                <input type="date" id="backtest-end-date">
+            </div>
+        </div>
+
+        <div class="date-hint">
+            Select the beginning and end of the period you want to backtest. Dates cannot be later than today.
+        </div>
+        <div class="date-error" id="backtest-date-error"></div>
+
+        <div class="modal-actions">
+            <button type="button" class="secondary-button" id="cancel-backtest-date">Cancel</button>
+            <button type="button" class="primary-button" id="apply-backtest-date">Apply Range</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="trade-date-modal">
+    <div class="date-modal">
+        <div class="date-modal-header">
+            <div class="date-modal-title">Custom Trade Chart Range</div>
+            <button type="button" class="close-button" id="close-trade-modal">×</button>
+        </div>
+
+        <div class="date-fields">
+            <div class="date-field">
+                <label for="trade-start-date">Start Date</label>
+                <input type="date" id="trade-start-date">
+            </div>
+            <div class="date-field">
+                <label for="trade-end-date">End Date</label>
+                <input type="date" id="trade-end-date">
+            </div>
+        </div>
+
+        <div class="date-hint">
+            Dates must be earlier than or equal to today and remain inside the selected backtest period.
+        </div>
+        <div class="date-error" id="trade-date-error"></div>
+
+        <div class="modal-actions">
+            <button type="button" class="secondary-button" id="cancel-trade-date">Cancel</button>
+            <button type="button" class="primary-button" id="apply-trade-date">Apply Range</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    /* ELEMENTS */
+
+    const periodSelect = document.getElementById("period");
+    const assetSelect = document.getElementById("asset");
+    const capitalInput = document.getElementById("capital");
+    const capitalUp = document.getElementById("capital-up");
+    const capitalDown = document.getElementById("capital-down");
+    const runBacktestButton = document.getElementById("run-backtest");
+    const status = document.getElementById("status");
+    const statusText = document.getElementById("status-text");
+    const tradeRangeSelect = document.getElementById("trade-range");
+    const resultsSection = document.getElementById("results-section");
+
+    const resultElements = {
+        strategyTotalReturn: document.getElementById("strategy-total-return"),
+        benchmarkTotalReturn: document.getElementById("benchmark-total-return"),
+        strategyCagr: document.getElementById("strategy-cagr"),
+        benchmarkCagr: document.getElementById("benchmark-cagr"),
+        strategyVolatility: document.getElementById("strategy-volatility"),
+        benchmarkVolatility: document.getElementById("benchmark-volatility"),
+        strategyMaxDrawdown: document.getElementById("strategy-max-drawdown"),
+        benchmarkMaxDrawdown: document.getElementById("benchmark-max-drawdown"),
+        strategySharpe: document.getElementById("strategy-sharpe"),
+        benchmarkSharpe: document.getElementById("benchmark-sharpe"),
+        strategySortino: document.getElementById("strategy-sortino"),
+        benchmarkSortino: document.getElementById("benchmark-sortino")
+    };
+
+    const backtestDateModal = document.getElementById("backtest-date-modal");
+    const closeBacktestModal = document.getElementById("close-backtest-modal");
+    const cancelBacktestDate = document.getElementById("cancel-backtest-date");
+    const applyBacktestDate = document.getElementById("apply-backtest-date");
+    const backtestStartDate = document.getElementById("backtest-start-date");
+    const backtestEndDate = document.getElementById("backtest-end-date");
+    const backtestDateError = document.getElementById("backtest-date-error");
+
+    const tradeDateModal = document.getElementById("trade-date-modal");
+    const closeTradeModal = document.getElementById("close-trade-modal");
+    const cancelTradeDate = document.getElementById("cancel-trade-date");
+    const applyTradeDate = document.getElementById("apply-trade-date");
+    const tradeStartDate = document.getElementById("trade-start-date");
+    const tradeEndDate = document.getElementById("trade-end-date");
+    const tradeDateError = document.getElementById("trade-date-error");
+
+    const tradeAnalysisGrid = document.getElementById("trade-analysis-grid");
+    const recentTradesHead = document.getElementById("recent-trades-head");
+    const recentTradesBody = document.getElementById("recent-trades-body");
+
+    /* STATE */
+
+    let customBacktestStart = null;
+    let customBacktestEnd = null;
+    let customTradeStart = null;
+    let customTradeEnd = null;
+    let previousPeriod = periodSelect.value;
+    let previousTradeRange = tradeRangeSelect.value;
+    let equityChart = null;
+    let drawdownChart = null;
+
+    /* DATE HELPERS */
+
+    function getTodayString() {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, "0");
+        const day = String(today.getDate()).padStart(2, "0");
+        return year + "-" + month + "-" + day;
+    }
+
+    function getRelativeDate(years) {
+        const date = new Date();
+        date.setFullYear(date.getFullYear() - years);
+
+        return date.getFullYear() + "-" +
+            String(date.getMonth() + 1).padStart(2, "0") + "-" +
+            String(date.getDate()).padStart(2, "0");
+    }
+
+    function shiftDate(dateString, days) {
+        const parts = dateString.split("-").map(Number);
+        const date = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+        date.setUTCDate(date.getUTCDate() + days);
+
+        return date.getUTCFullYear() + "-" +
+            String(date.getUTCMonth() + 1).padStart(2, "0") + "-" +
+            String(date.getUTCDate()).padStart(2, "0");
+    }
+
+    function formatCustomRange(start, end) {
+        const startDate = new Date(start + "T00:00:00");
+        const endDate = new Date(end + "T00:00:00");
+        const options = { month: "short", year: "numeric" };
+
+        return "Custom: " +
+            startDate.toLocaleDateString("en-US", options) +
+            " – " +
+            endDate.toLocaleDateString("en-US", options);
+    }
+
+    function showDateError(element, message) {
+        element.textContent = message;
+        element.classList.add("active");
+    }
+
+    function clearDateError(element) {
+        element.textContent = "";
+        element.classList.remove("active");
+    }
+
+    /* CAPITAL CONTROLS */
+
+    capitalUp.addEventListener("click", function () {
+        capitalInput.value = Number(capitalInput.value || 0) + 1000;
+    });
+
+    capitalDown.addEventListener("click", function () {
+        const newValue = Number(capitalInput.value || 0) - 1000;
+        if (newValue >= 1000) capitalInput.value = newValue;
+    });
+
+    /* CUSTOM BACKTEST RANGE */
+
+    function updateCustomBacktestLabel() {
+        const option = periodSelect.querySelector('option[value="custom"]');
+
+        if (customBacktestStart !== null && customBacktestEnd !== null) {
+            option.textContent = formatCustomRange(customBacktestStart, customBacktestEnd);
+        } else {
+            option.textContent = "Custom Range...";
+        }
+    }
+
+    function openBacktestModal() {
+        const today = getTodayString();
+        backtestStartDate.max = today;
+        backtestEndDate.max = today;
+
+        if (customBacktestStart !== null && customBacktestEnd !== null) {
+            backtestStartDate.value = customBacktestStart;
+            backtestEndDate.value = customBacktestEnd;
+        } else {
+            backtestStartDate.value = "";
+            backtestEndDate.value = "";
+        }
+
+        updateBacktestDateInputLimits();
+        clearDateError(backtestDateError);
+        backtestDateModal.classList.add("active");
+    }
+
+    function closeBacktestModalFunction() {
+        backtestDateModal.classList.remove("active");
+        clearDateError(backtestDateError);
+    }
+
+    function cancelBacktestRange() {
+        periodSelect.value = previousPeriod === "custom" ? "5y" : previousPeriod;
+        customBacktestStart = null;
+        customBacktestEnd = null;
+        customTradeStart = null;
+        customTradeEnd = null;
+
+        updateCustomBacktestLabel();
+        closeBacktestModalFunction();
+        updateTradeRangeOptions();
+        setTradeDateLimits();
+    }
+
+    function updateBacktestDateInputLimits() {
+        const today = getTodayString();
+        backtestStartDate.max = today;
+        backtestEndDate.max = today;
+
+        if (backtestEndDate.value) {
+            const latestStart = shiftDate(backtestEndDate.value, -1);
+            backtestStartDate.max = latestStart < today ? latestStart : today;
+        }
+
+        if (backtestStartDate.value) {
+            backtestEndDate.min = shiftDate(backtestStartDate.value, 1);
+        } else {
+            backtestEndDate.removeAttribute("min");
+        }
+    }
+
+    backtestStartDate.addEventListener("change", function () {
+        updateBacktestDateInputLimits();
+        clearDateError(backtestDateError);
+    });
+
+    backtestEndDate.addEventListener("change", function () {
+        updateBacktestDateInputLimits();
+        clearDateError(backtestDateError);
+    });
+
+    periodSelect.addEventListener("change", function () {
+        if (periodSelect.value === "custom") {
+            openBacktestModal();
+        } else {
+            previousPeriod = periodSelect.value;
+            customBacktestStart = null;
+            customBacktestEnd = null;
+            customTradeStart = null;
+            customTradeEnd = null;
+            updateCustomBacktestLabel();
+        }
+
+        updateTradeRangeOptions();
+        setTradeDateLimits();
+    });
+
+    closeBacktestModal.addEventListener("click", cancelBacktestRange);
+    cancelBacktestDate.addEventListener("click", cancelBacktestRange);
+
+    applyBacktestDate.addEventListener("click", function () {
+        const start = backtestStartDate.value;
+        const end = backtestEndDate.value;
+        const today = getTodayString();
+
+        if (!start || !end) {
+            showDateError(backtestDateError, "Please select both a start date and an end date.");
+            return;
+        }
+
+        if (start > today || end > today) {
+            showDateError(backtestDateError, "Dates cannot be later than today.");
+            return;
+        }
+
+        if (start >= end) {
+            showDateError(backtestDateError, "End date must be at least one day after the start date.");
+            return;
+        }
+
+        customBacktestStart = start;
+        customBacktestEnd = end;
+        periodSelect.value = "custom";
+        previousPeriod = "custom";
+
+        updateCustomBacktestLabel();
+        closeBacktestModalFunction();
+        updateTradeRangeOptions();
+        setTradeDateLimits();
+    });
+
+    /* TRADE RANGE OPTIONS */
+
+    function getBacktestYears() {
+        if (periodSelect.value === "1y") return 1;
+        if (periodSelect.value === "3y") return 3;
+        if (periodSelect.value === "5y") return 5;
+        if (periodSelect.value === "10y") return 10;
+        if (periodSelect.value === "max") return Infinity;
+
+        if (
+            periodSelect.value === "custom" &&
+            customBacktestStart !== null &&
+            customBacktestEnd !== null
+        ) {
+            const start = new Date(customBacktestStart + "T00:00:00");
+            const end = new Date(customBacktestEnd + "T00:00:00");
+            return (end - start) / (1000 * 60 * 60 * 24 * 365.25);
+        }
+
+        return 5;
+    }
+
+    function addTradeOption(value, text, enabled) {
+        if (!enabled) return;
+
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = text;
+        tradeRangeSelect.appendChild(option);
+    }
+
+    function updateCustomTradeLabel() {
+        const option = tradeRangeSelect.querySelector('option[value="custom"]');
+        if (!option) return;
+
+        if (customTradeStart !== null && customTradeEnd !== null) {
+            option.textContent = formatCustomRange(customTradeStart, customTradeEnd);
+        } else {
+            option.textContent = "Custom Range...";
+        }
+    }
+
+    function updateTradeRangeOptions() {
+        const previousValue = tradeRangeSelect.value;
+        const availableYears = getBacktestYears();
+
+        tradeRangeSelect.innerHTML = "";
+
+        addTradeOption("1y", "Last 1 Year", availableYears >= 1);
+        addTradeOption("3y", "Last 3 Years ★ Recommended", availableYears >= 3);
+        addTradeOption("5y", "Last 5 Years", availableYears >= 5);
+        addTradeOption("10y", "Last 10 Years", availableYears >= 10);
+        addTradeOption("full", "Full Backtest", true);
+        addTradeOption("custom", "Custom Range...", true);
+
+        const availableValues = Array.from(tradeRangeSelect.options).map(option => option.value);
+
+        if (availableValues.includes(previousValue)) {
+            tradeRangeSelect.value = previousValue;
+        } else if (availableYears >= 3) {
+            tradeRangeSelect.value = "3y";
+        } else {
+            tradeRangeSelect.value = "full";
+        }
+
+        updateCustomTradeLabel();
+        previousTradeRange = tradeRangeSelect.value;
+    }
+
+    /* TRADE DATE LIMITS */
+
+    function getBacktestDateBounds() {
+        if (
+            periodSelect.value === "custom" &&
+            customBacktestStart !== null &&
+            customBacktestEnd !== null
+        ) {
+            return { start: customBacktestStart, end: customBacktestEnd };
+        }
+
+        if (periodSelect.value === "1y") {
+            return { start: getRelativeDate(1), end: getTodayString() };
+        }
+
+        if (periodSelect.value === "3y") {
+            return { start: getRelativeDate(3), end: getTodayString() };
+        }
+
+        if (periodSelect.value === "5y") {
+            return { start: getRelativeDate(5), end: getTodayString() };
+        }
+
+        if (periodSelect.value === "10y") {
+            return { start: getRelativeDate(10), end: getTodayString() };
+        }
+
+        if (periodSelect.value === "max") {
+            return { start: "1900-01-01", end: getTodayString() };
+        }
+
+        return null;
+    }
+
+    function setTradeDateLimits() {
+        const bounds = getBacktestDateBounds();
+        const today = getTodayString();
+        const minimum = bounds ? bounds.start : "1900-01-01";
+        const maximum = bounds && bounds.end < today ? bounds.end : today;
+
+        tradeStartDate.min = minimum;
+        tradeEndDate.min = minimum;
+        tradeStartDate.max = maximum;
+        tradeEndDate.max = maximum;
+
+        updateTradeDateInputLimits();
+    }
+
+    function updateTradeDateInputLimits() {
+        const bounds = getBacktestDateBounds();
+        const today = getTodayString();
+        const minimum = bounds ? bounds.start : "1900-01-01";
+        const maximum = bounds && bounds.end < today ? bounds.end : today;
+
+        tradeStartDate.min = minimum;
+        tradeEndDate.min = minimum;
+        tradeStartDate.max = maximum;
+        tradeEndDate.max = maximum;
+
+        if (tradeEndDate.value) {
+            const latestStart = shiftDate(tradeEndDate.value, -1);
+            tradeStartDate.max = latestStart < maximum ? latestStart : maximum;
+        }
+
+        if (tradeStartDate.value) {
+            const earliestEnd = shiftDate(tradeStartDate.value, 1);
+            tradeEndDate.min = earliestEnd > minimum ? earliestEnd : minimum;
+        }
+    }
+
+    tradeStartDate.addEventListener("change", function () {
+        updateTradeDateInputLimits();
+        clearDateError(tradeDateError);
+    });
+
+    tradeEndDate.addEventListener("change", function () {
+        updateTradeDateInputLimits();
+        clearDateError(tradeDateError);
+    });
+
+    tradeRangeSelect.addEventListener("change", function () {
+        if (tradeRangeSelect.value === "custom") {
+            setTradeDateLimits();
+
+            if (customTradeStart !== null && customTradeEnd !== null) {
+                tradeStartDate.value = customTradeStart;
+                tradeEndDate.value = customTradeEnd;
+            } else {
+                tradeStartDate.value = "";
+                tradeEndDate.value = "";
+            }
+
+            updateTradeDateInputLimits();
+            clearDateError(tradeDateError);
+            tradeDateModal.classList.add("active");
+        } else {
+            customTradeStart = null;
+            customTradeEnd = null;
+            previousTradeRange = tradeRangeSelect.value;
+            updateCustomTradeLabel();
+        }
+    });
+
+    function closeTradeModalFunction() {
+        tradeDateModal.classList.remove("active");
+        clearDateError(tradeDateError);
+    }
+
+    function cancelTradeRange() {
+        tradeRangeSelect.value = previousTradeRange;
+        closeTradeModalFunction();
+    }
+
+    closeTradeModal.addEventListener("click", cancelTradeRange);
+    cancelTradeDate.addEventListener("click", cancelTradeRange);
+
+    applyTradeDate.addEventListener("click", function () {
+        const start = tradeStartDate.value;
+        const end = tradeEndDate.value;
+        const today = getTodayString();
+
+        if (!start || !end) {
+            showDateError(tradeDateError, "Please select both a start date and an end date.");
+            return;
+        }
+
+        if (start > today || end > today) {
+            showDateError(tradeDateError, "Dates cannot be later than today.");
+            return;
+        }
+
+        if (start >= end) {
+            showDateError(tradeDateError, "End date must be at least one day after the start date.");
+            return;
+        }
+
+        const bounds = getBacktestDateBounds();
+
+        if (bounds && (start < bounds.start || end > bounds.end)) {
+            showDateError(tradeDateError, "Trade chart dates must remain inside the selected backtest period.");
+            return;
+        }
+
+        customTradeStart = start;
+        customTradeEnd = end;
+        tradeRangeSelect.value = "custom";
+        previousTradeRange = "custom";
+
+        updateCustomTradeLabel();
+        closeTradeModalFunction();
+    });
+
+    /* MODAL BACKDROPS */
+
+    backtestDateModal.addEventListener("click", function (event) {
+        if (event.target === backtestDateModal) cancelBacktestRange();
+    });
+
+    tradeDateModal.addEventListener("click", function (event) {
+        if (event.target === tradeDateModal) cancelTradeRange();
+    });
+
+    /* RESULT FORMATTING */
+
+    function formatPercentage(value) {
+        if (value === null || value === undefined) return "—";
+        const number = Number(String(value).replace("%", ""));
+        if (!Number.isFinite(number)) return "—";
+        return number.toFixed(2) + "%";
+    }
+
+    function formatRatio(value) {
+        if (value === null || value === undefined) return "—";
+        const number = Number(value);
+        if (!Number.isFinite(number)) return "—";
+        return number.toFixed(2);
+    }
+
+    function getPerformanceValue(performance, metric, column) {
+        if (!performance || !performance[metric]) return null;
+        return performance[metric][column];
+    }
+
+    function updateResults(performance) {
+        resultElements.strategyTotalReturn.textContent =
+            formatPercentage(getPerformanceValue(performance, "Total Return", "Strategy"));
+
+        resultElements.benchmarkTotalReturn.textContent =
+            "Benchmark: " + formatPercentage(getPerformanceValue(performance, "Total Return", "Benchmark"));
+
+        resultElements.strategyCagr.textContent =
+            formatPercentage(getPerformanceValue(performance, "CAGR", "Strategy"));
+
+        resultElements.benchmarkCagr.textContent =
+            "Benchmark: " + formatPercentage(getPerformanceValue(performance, "CAGR", "Benchmark"));
+
+        resultElements.strategyVolatility.textContent =
+            formatPercentage(getPerformanceValue(performance, "Volatility", "Strategy"));
+
+        resultElements.benchmarkVolatility.textContent =
+            "Benchmark: " + formatPercentage(getPerformanceValue(performance, "Volatility", "Benchmark"));
+
+        resultElements.strategyMaxDrawdown.textContent =
+            formatPercentage(
+                getPerformanceValue(performance, "Max drawdown", "Strategy") ??
+                getPerformanceValue(performance, "Max Drawdown", "Strategy")
+            );
+
+        resultElements.benchmarkMaxDrawdown.textContent =
+            "Benchmark: " + formatPercentage(
+                getPerformanceValue(performance, "Max drawdown", "Benchmark") ??
+                getPerformanceValue(performance, "Max Drawdown", "Benchmark")
+            );
+
+        resultElements.strategySharpe.textContent =
+            formatRatio(getPerformanceValue(performance, "Sharpe Ratio", "Strategy"));
+
+        resultElements.benchmarkSharpe.textContent =
+            "Benchmark: " + formatRatio(getPerformanceValue(performance, "Sharpe Ratio", "Benchmark"));
+
+        resultElements.strategySortino.textContent =
+            formatRatio(getPerformanceValue(performance, "Sortino Ratio", "Strategy"));
+
+        resultElements.benchmarkSortino.textContent =
+            "Benchmark: " + formatRatio(getPerformanceValue(performance, "Sortino Ratio", "Benchmark"));
+
+        resultsSection.classList.add("visible");
+    }
+
+    /* OPEN POSITION */
+
+    function formatCurrency(value) {
+        if (value === null || value === undefined || value === "") return "—";
+
+        const number = Number(value);
+        if (!Number.isFinite(number)) return "—";
+
+        return number.toLocaleString("en-US", {
+            style: "currency",
+            currency: "USD",
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    }
+
+    function renderOpenPosition(position) {
+        const card = document.getElementById("open-position-card");
+        const grid = document.getElementById("open-position-grid");
+
+        if (
+            !position ||
+            position.status === "closed" ||
+            position.Status === "Closed" ||
+            position.is_open === false ||
+            position.Is_open === false
+        ) {
+            card.classList.remove("visible");
+            grid.innerHTML = "";
+            return;
+        }
+
+        const entryPrice =
+            position.entry_price ??
+            position.Entry_price ??
+            position.entryPrice;
+
+        const currentPrice =
+            position.current_price ??
+            position.Current_price ??
+            position.currentPrice;
+
+        const unrealizedReturn =
+            position.unrealized_return ??
+            position.Unrealized_return ??
+            position.unrealizedReturn;
+
+        const statusValue =
+            position.status ??
+            position.Status ??
+            "Open";
+
+        if (
+            entryPrice === undefined &&
+            currentPrice === undefined &&
+            unrealizedReturn === undefined
+        ) {
+            card.classList.remove("visible");
+            grid.innerHTML = "";
+            return;
+        }
+
+        const returnNumber = Number(
+            String(unrealizedReturn ?? "").replace("%", "").replace("+", "")
+        );
+
+        const returnText =
+            unrealizedReturn === null || unrealizedReturn === undefined
+                ? "—"
+                : (returnNumber > 0 ? "+" : "") +
+                    (
+                        Number.isFinite(returnNumber)
+                            ? returnNumber.toFixed(2) + "%"
+                            : String(unrealizedReturn)
+                    );
+
+        const fields = [
+            {
+                label: "Entry Price",
+                value: formatCurrency(entryPrice),
+                className: ""
+            },
+            {
+                label: "Current Price",
+                value: formatCurrency(currentPrice),
+                className: ""
+            },
+            {
+                label: "Unrealized Return",
+                value: returnText,
+                className: Number.isFinite(returnNumber) && returnNumber > 0
+                    ? "positive"
+                    : Number.isFinite(returnNumber) && returnNumber < 0
+                        ? "negative"
+                        : ""
+            },
+            {
+                label: "Status",
+                value: String(statusValue),
+                className: ""
+            }
+        ];
+
+        grid.innerHTML = fields.map(function (field) {
+            return `
+                <div class="open-position-stat">
+                    <div class="open-position-label">${field.label}</div>
+                    <div class="open-position-value ${field.className}">${field.value}</div>
+                </div>
+            `;
+        }).join("");
+
+        card.classList.add("visible");
+    }
+
+    /* CHARTS */
+
+    function getChartDateRange(data) {
+        if (!data || data.length === 0) return [];
+
+        let startDate;
+        let endDate;
+
+        if (tradeRangeSelect.value === "custom" && customTradeStart && customTradeEnd) {
+            startDate = customTradeStart;
+            endDate = customTradeEnd;
+        } else if (tradeRangeSelect.value === "full") {
+            startDate = null;
+            endDate = null;
+        } else {
+            const years = Number.parseInt(tradeRangeSelect.value, 10);
+            startDate = Number.isFinite(years) ? getRelativeDate(years) : null;
+            endDate = getTodayString();
+        }
+
+        return data.filter(function (item) {
+            const date = String(item.Date ?? item.date ?? "").slice(0, 10);
+
+            if (!date) return false;
+            if (startDate && date < startDate) return false;
+            if (endDate && date > endDate) return false;
+
+            return true;
+        });
+    }
+
+    function updateEquityChart(data) {
+        const filteredData = getChartDateRange(data);
+        const canvas = document.getElementById("equity-chart");
+
+        if (equityChart) equityChart.destroy();
+
+        if (!filteredData.length) {
+            equityChart = new Chart(canvas, {
+                type: "line",
+                data: { labels: [], datasets: [] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+            return;
+        }
+
+        equityChart = new Chart(canvas, {
+            type: "line",
+            data: {
+                labels: filteredData.map(item => String(item.Date ?? item.date).slice(0, 10)),
+                datasets: [
+                    {
+                        label: "Strategy Equity",
+                        data: filteredData.map(item => item.Equity ?? item.equity),
+                        borderColor: "#3b82f6",
+                        backgroundColor: "rgba(59, 130, 246, 0.08)",
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.15
+                    },
+                    {
+                        label: "SPY Buy & Hold",
+                        data: filteredData.map(item => item.Benchmark_Equity ?? item.benchmark_equity),
+                        borderColor: "#94a3b8",
+                        backgroundColor: "rgba(148, 163, 184, 0.05)",
+                        borderWidth: 1.5,
+                        pointRadius: 0,
+                        tension: 0.15
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: "index",
+                    intersect: false
+                },
+                plugins: {
+                    legend: {
+                        labels: { color: "#a9bbcc" }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            color: "#71879c",
+                            maxTicksLimit: 8
+                        },
+                        grid: { color: "rgba(113, 135, 156, 0.08)" }
+                    },
+                    y: {
+                        ticks: {
+                            color: "#71879c",
+                            callback: value => "$" + Number(value).toLocaleString("en-US")
+                        },
+                        grid: { color: "rgba(113, 135, 156, 0.12)" }
+                    }
+                }
+            }
+        });
+    }
+
+    function updateDrawdownChart(data) {
+        const filteredData = getChartDateRange(data);
+        const canvas = document.getElementById("drawdown-chart");
+
+        if (drawdownChart) drawdownChart.destroy();
+
+        if (!filteredData.length) {
+            drawdownChart = new Chart(canvas, {
+                type: "line",
+                data: { labels: [], datasets: [] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+            return;
+        }
+
+        drawdownChart = new Chart(canvas, {
+            type: "line",
+            data: {
+                labels: filteredData.map(item => String(item.Date ?? item.date).slice(0, 10)),
+                datasets: [
+                    {
+                        label: "Strategy Drawdown",
+                        data: filteredData.map(item => item.Drawdown ?? item.drawdown),
+                        borderColor: "#fb7185",
+                        backgroundColor: "rgba(251, 113, 133, 0.12)",
+                        fill: true,
+                        borderWidth: 1.5,
+                        pointRadius: 0,
+                        tension: 0.1
+                    },
+                    {
+                        label: "Benchmark Drawdown",
+                        data: filteredData.map(item => item.Benchmark_Drawdown ?? item.benchmark_drawdown),
+                        borderColor: "#94a3b8",
+                        backgroundColor: "rgba(148, 163, 184, 0.04)",
+                        fill: false,
+                        borderWidth: 1.2,
+                        pointRadius: 0,
+                        tension: 0.1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: "index",
+                    intersect: false
+                },
+                plugins: {
+                    legend: {
+                        labels: { color: "#a9bbcc" }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            color: "#71879c",
+                            maxTicksLimit: 8
+                        },
+                        grid: { color: "rgba(113, 135, 156, 0.08)" }
+                    },
+                    y: {
+                        ticks: {
+                            color: "#71879c",
+                            callback: value => Number(value).toFixed(1) + "%"
+                        },
+                        grid: { color: "rgba(113, 135, 156, 0.12)" }
+                    }
+                }
+            }
+        });
+    }
+
+    /* TRADE ANALYSIS */
+
+    function getTradeStatsRows(tradeStats) {
+        if (!tradeStats) return [];
+
+        if (Array.isArray(tradeStats)) {
+            return tradeStats.map(function (item) {
+                return {
+                    label: item.label || item.Benchmark || item.name || "Statistic",
+                    value: item.value ?? item.Statistics
+                };
+            });
+        }
+
+        if (
+            Array.isArray(tradeStats.Benchmark) &&
+            Array.isArray(tradeStats.Statistics)
+        ) {
+            return tradeStats.Benchmark.map(function (label, index) {
+                return {
+                    label: label,
+                    value: tradeStats.Statistics[index]
+                };
+            });
+        }
+
+        return Object.entries(tradeStats).map(function (entry) {
+            return {
+                label: entry[0],
+                value: entry[1]
+            };
+        });
+    }
+
+    function formatOpenPositionPrice(value) {
+    if (value === null || value === undefined || value === "") return "—";
+
+    const number = Number(value);
+
+    return Number.isFinite(number)
+        ? number.toLocaleString("en-US", {
+            style: "currency",
+            currency: "USD",
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        })
+        : "—";
+    }
+
+    function renderOpenPosition(position) {
+        const card = document.getElementById("open-position-card");
+        const grid = document.getElementById("open-position-grid");
+
+        if (
+            !position ||
+            typeof position !== "object" ||
+            position.is_open === false ||
+            position.Is_open === false ||
+            String(position.status ?? position.Status ?? "").toLowerCase() === "closed"
+        ) {
+            card.classList.remove("visible");
+            grid.innerHTML = "";
+            return;
+        }
+
+        const entry =
+            position.entry_price ??
+            position.Entry_price ??
+            position.entryPrice;
+
+        const current =
+            position.current_price ??
+            position.Current_price ??
+            position.currentPrice;
+
+        const rawReturn =
+            position.unrealized_return ??
+            position.Unrealized_return ??
+            position.unrealizedReturn;
+
+        const statusText = position.status ?? position.Status ?? "Open";
+
+        if (entry === undefined && current === undefined && rawReturn === undefined) {
+            card.classList.remove("visible");
+            grid.innerHTML = "";
+            return;
+        }
+
+        const returnNumber = Number(
+            String(rawReturn ?? "").replace("%", "").replace("+", "")
+        );
+
+        let returnText = "—";
+
+        if (rawReturn !== null && rawReturn !== undefined && rawReturn !== "") {
+            returnText = Number.isFinite(returnNumber)
+                ? `${returnNumber > 0 ? "+" : ""}${returnNumber.toFixed(2)}%`
+                : String(rawReturn);
+        }
+
+        const returnClass = Number.isFinite(returnNumber)
+            ? returnNumber > 0
+                ? "positive"
+                : returnNumber < 0
+                    ? "negative"
+                    : ""
+            : "";
+
+        const fields = [
+            {
+                label: "Entry Price",
+                value: formatOpenPositionPrice(entry),
+                className: ""
+            },
+            {
+                label: "Current Price",
+                value: formatOpenPositionPrice(current),
+                className: ""
+            },
+            {
+                label: "Unrealized Return",
+                value: returnText,
+                className: returnClass
+            },
+            {
+                label: "Status",
+                value: String(statusText),
+                className: ""
+            }
+        ];
+
+        grid.innerHTML = fields.map(field => `
+            <div class="open-position-stat">
+                <div class="open-position-label">${field.label}</div>
+                <div class="open-position-value ${field.className}">
+                    ${field.value}
+                </div>
+            </div>
+        `).join("");
+
+        card.classList.add("visible");
+    }
+
+    function renderTradeAnalysis(tradeStats) {
+        const container = document.getElementById("trade-analysis-grid");
+        const rows = getTradeStatsRows(tradeStats);
+
+        if (rows.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    No completed trades during this period.
+                </div>
+            `;
+            return;
+        }
+
+        const labels = [
+            "Total Trades",
+            "Winning Trades",
+            "Losing Trades",
+            "Win Rate",
+            "Average Win",
+            "Average Loss",
+            "Best Trade",
+            "Worst Trade"
+        ];
+
+        const selectedRows = rows.filter(function (row) {
+            return labels.some(label =>
+                String(row.label).toLowerCase().includes(label.toLowerCase())
+            );
+        });
+
+        const displayRows = selectedRows.length ? selectedRows : rows;
+
+        if (
+            displayRows.length === 1 &&
+            Number(displayRows[0].value) === 0 &&
+            String(displayRows[0].label).toLowerCase().includes("total trades")
+        ) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    No completed trades during this period.
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = displayRows.map(function (row) {
+            const numericValue = Number(
+                String(row.value ?? "").replace("%", "").replace("$", "").replace(",", "")
+            );
+
+            let value = row.value;
+
+            if (typeof value === "number" && /rate|return|win|loss/i.test(row.label)) {
+                value = value.toFixed(2) + (
+                    /rate|return/i.test(row.label) ? "%" : ""
+                );
+            }
+
+            const className = Number.isFinite(numericValue)
+                ? numericValue > 0
+                    ? "positive"
+                    : numericValue < 0
+                        ? "negative"
+                        : ""
+                : "";
+
+            return `
+                <div class="trade-stat">
+                    <div class="trade-stat-label">${row.label}</div>
+                    <div class="trade-stat-value ${className}">${value ?? "—"}</div>
+                </div>
+            `;
+        }).join("");
+    }
+
+    /* RECENT TRADES */
+
+    function renderRecentTrades(trades) {
+        if (!Array.isArray(trades) || trades.length === 0) {
+            recentTradesHead.innerHTML = "";
+            recentTradesBody.innerHTML = `
+                <tr>
+                    <td class="empty-state">No completed trades during this period.</td>
+                </tr>
+            `;
+            return;
+        }
+
+        const columns = Object.keys(trades[0]);
+
+        recentTradesHead.innerHTML = `
+            <tr>
+                ${columns.map(key => `<th>${key.replaceAll("_", " ")}</th>`).join("")}
+            </tr>
+        `;
+
+        recentTradesBody.innerHTML = "";
+
+        trades.forEach(function (trade) {
+            const row = document.createElement("tr");
+
+            columns.forEach(function (key) {
+                const cell = document.createElement("td");
+                const value = trade[key];
+
+                if (
+                    value !== null &&
+                    value !== undefined &&
+                    /date/i.test(key)
+                ) {
+                    const date = new Date(value);
+                    cell.textContent = Number.isNaN(date.getTime())
+                        ? String(value)
+                        : date.toLocaleDateString("en-US", {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                            timeZone: "UTC"
+                        });
+                } else if (
+                    typeof value === "number" &&
+                    (
+                        key.toLowerCase().includes("profit") ||
+                        key.toLowerCase().includes("pnl")
+                    )
+                ) {
+                    cell.textContent = formatCurrency(value);
+                    cell.classList.add(value > 0 ? "positive" : value < 0 ? "negative" : "");
+                } else if (
+                    key.toLowerCase().includes("return") &&
+                    value !== undefined
+                ) {
+                    const numericValue = parseFloat(String(value).replace("%", ""));
+                    cell.textContent = Number.isFinite(numericValue)
+                        ? numericValue.toFixed(2) + "%"
+                        : String(value);
+
+                    if (Number.isFinite(numericValue)) {
+                        cell.classList.add(
+                            numericValue > 0 ? "positive" : numericValue < 0 ? "negative" : ""
+                        );
+                    }
+                } else {
+                    cell.textContent = value === null || value === undefined
+                        ? "—"
+                        : String(value);
+                }
+
+                row.appendChild(cell);
+            });
+
+            recentTradesBody.appendChild(row);
+        });
+    }
+
+    /* SIDEBAR NAVIGATION */
+
+    document.querySelectorAll(".nav-item[data-scroll]").forEach(function (item) {
+        item.addEventListener("click", function () {
+            const target = document.getElementById(item.dataset.scroll);
+            if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+    });
+
+    /* RUN BACKTEST */
+
+    runBacktestButton.addEventListener("click", async function () {
+        const period = periodSelect.value;
+        const initialCapital = Number(capitalInput.value);
+
+        if (assetSelect.value !== "SPY") {
+            statusText.textContent = "GOLD is not supported yet";
+            return;
+        }
+
+        if (!Number.isFinite(initialCapital) || initialCapital < 1000) {
+            statusText.textContent = "Initial capital must be at least 1,000";
+            return;
+        }
+
+        if (
+            period === "custom" &&
+            (customBacktestStart === null || customBacktestEnd === null)
+        ) {
+            statusText.textContent = "Select a custom backtest range first";
+            return;
+        }
+
+        if (
+            period === "custom" &&
+            (
+                customBacktestStart > getTodayString() ||
+                customBacktestEnd > getTodayString() ||
+                customBacktestStart >= customBacktestEnd
+            )
+        ) {
+            statusText.textContent = "Invalid custom backtest dates";
+            return;
+        }
+
+        status.classList.remove("error");
+        status.classList.add("running");
+        statusText.textContent = "Running...";
+        runBacktestButton.disabled = true;
+
+        try {
+            const response = await fetch("/run-backtest", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    asset: assetSelect.value,
+                    period: period,
+                    initial_capital: initialCapital,
+                    start_date: period === "custom" ? customBacktestStart : null,
+                    end_date: period === "custom" ? customBacktestEnd : null
+                })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || "Backtest failed.");
+            }
+            
+            
+
+            updateResults(result.performance);
+            renderOpenPosition(result.open_position);
+            updateEquityChart(result.equity_curve);
+            updateDrawdownChart(result.drawdown);
+            renderTradeAnalysis(result.trade_stats);
+            renderRecentTrades(result.recent_trades);
+
+            status.classList.remove("running", "error");
+            statusText.textContent = "Complete";
+        } catch (error) {
+            status.classList.remove("running");
+            status.classList.add("error");
+            statusText.textContent = error.message;
+            console.error("Backtest error:", error);
+        } finally {
+            runBacktestButton.disabled = false;
+        }
+    });
+
+    /* INITIAL STATE */
+
+    updateCustomBacktestLabel();
+    updateTradeRangeOptions();
+    setTradeDateLimits();
+</script>
+</body>
+</html>

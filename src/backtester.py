@@ -1,77 +1,151 @@
 import pandas as pd
 import numpy as np
 
+
 def run_backtest(df, initial_capital=100000):
-
     transaction_cost = 0.0005
-    filt = (df['Signal'] == 1) | (df['Signal'] == -1)
+    df = df.copy()
 
-    exit_prices = np.array([])
-    entry_prices = np.array([])
-    entry_dates = np.array([])
-    exit_dates = np.array([])
+    df["Market_Return"] = df["Close"].pct_change().fillna(0.0)
+    df["Strategy_Return"] = 0.0
+    df["Execution"] = np.nan
 
-    df['Strategy_Return'] = 0.0
-    df['Market_Return'] = ((df['Close'] - df['Close'].shift(1))/df['Close'].shift(1))
+    completed_trades = []
 
-    df.loc[df['Position'] == 1, 'Strategy_Return'] = df.loc[df['Position'] == 1, 'Market_Return']
+    position = 0
+    entry_date = None
+    entry_price = None
 
-    entry_day = (df['Position'] == 1) & (df['Position'].shift(1) == 0)
-    exit_day = ((df['Position'] == 0)) & (df['Position'].shift(1) == 1)
+    strategy_returns = np.zeros(len(df), dtype=float)
 
-    df.loc[filt.shift(1, fill_value = False), 'Execution'] = df['Open']
+    # Execute signals at the next trading day's open.
+    # The final day's signal cannot execute because there is no next day.
+    for i in range(len(df) - 1):
+        signal = int(df["Signal"].iloc[i])
 
-    
-    for index, signal in df['Signal'].items():
-        i = df.index.get_loc(index)
+        execution_idx = i + 1
+        execution_date = df.index[execution_idx]
+        execution_price = df["Open"].iloc[execution_idx]
 
-        if signal == 1 and df.loc[index, 'Position'] == 0:
-            if i == len(df) - 1:
-                continue
-            entry_prices = np.append(entry_prices,df.iloc[i + 1]['Execution'])
-            entry_dates = np.append(entry_dates, df.index[i + 1])
+        if pd.isna(execution_price) or execution_price <= 0:
+            continue
 
-        elif signal == -1 and df.loc[index, 'Position'] == 1:
-            if i == len(df) - 1:
-                continue
-            exit_prices = np.append(exit_prices,df.iloc[i + 1]['Execution'])
-            exit_dates = np.append(exit_dates,  df.index[i + 1])
+        execution_price = float(execution_price)
 
-    df.loc[entry_day, 'Strategy_Return'] = (df['Close'] - df['Open']) / df['Open']
-    df.loc[exit_day, 'Strategy_Return'] = (df['Open'] - df['Close'].shift(1)) / df['Close'].shift(1)
+        # Enter a long position.
+        if signal == 1 and position == 0:
+            position = 1
+            entry_date = execution_date
+            entry_price = execution_price
 
-    df.loc[entry_day, 'Strategy_Return']  =  (1 - transaction_cost) * (1 +  df.loc[entry_day, 'Strategy_Return']) - 1
-    df.loc[exit_day, 'Strategy_Return']  = (1 - transaction_cost) * (1 +  df.loc[exit_day, 'Strategy_Return']) - 1
-    df['Equity'] = initial_capital * (1 + df['Strategy_Return']).cumprod()
+            df.loc[execution_date, "Execution"] = entry_price
 
-    if len(entry_prices) > len(exit_prices):
-        open_entry = entry_prices[-1]
-        entry_prices = entry_prices[:-1]
-        entry_dates = entry_dates[:-1]
-    elif len(entry_prices) < len(exit_prices):
-        raise ValueError("More exits than entries detected")
-    gross_trade_returns = (exit_prices - entry_prices) / entry_prices
+            # Charge entry transaction cost.
+            strategy_returns[execution_idx] -= transaction_cost
 
-    net_trade_returns = ((1 - transaction_cost)* (1 + gross_trade_returns)* (1 - transaction_cost)- 1)
+        # Exit a long position.
+        elif signal == -1 and position == 1:
+            exit_date = execution_date
+            exit_price = execution_price
 
-    trades_capital = initial_capital * (1 + net_trade_returns).cumprod()
+            df.loc[execution_date, "Execution"] = exit_price
 
-    df['Market_Return'] = df['Market_Return'].fillna(0)
-    df['Benchmark_Return'] = df['Market_Return']
-    df['Benchmark_Equity'] = initial_capital * (1+ df['Benchmark_Return']).cumprod()
+            gross_return = exit_price / entry_price - 1.0
 
+            net_return = (
+                (1.0 - transaction_cost)
+                * (1.0 + gross_return)
+                * (1.0 - transaction_cost)
+                - 1.0
+            )
 
-    show_trades = {}
+            completed_trades.append({
+                "Entry_date": entry_date,
+                "Entry_price": entry_price,
+                "Exit_price": exit_price,
+                "Gross_return": gross_return,
+                "Net_return": net_return,
+                "Exit_date": exit_date
+            })
 
-    show_trades.update({'Entry_date':entry_dates})
-    show_trades.update({f'Entry_price':entry_prices})
-    show_trades.update({f'Exit_price':exit_prices})
-    show_trades.update({f'Gross_return':gross_trade_returns})
-    show_trades.update({f'Net_return':net_trade_returns})
-    show_trades.update({f'Exit_date':exit_dates})
+            position = 0
+            entry_date = None
+            entry_price = None
 
-    trades_df = pd.DataFrame(show_trades)
-    trades_df.index.name = 'Trade_no'
+            # Charge exit transaction cost.
+            strategy_returns[execution_idx] -= transaction_cost
+
+    # Calculate the daily returns from the position held during
+    # each close-to-close interval, using the previous day's signal.
+    held_position = 0
+
+    for i in range(len(df)):
+        if i > 0:
+            previous_signal = int(df["Signal"].iloc[i - 1])
+
+            if previous_signal == 1 and held_position == 0:
+                held_position = 1
+            elif previous_signal == -1 and held_position == 1:
+                held_position = 0
+
+        if held_position == 1:
+            strategy_returns[i] += float(df["Market_Return"].iloc[i])
+
+    # Apply entry and exit costs multiplicatively on execution dates.
+    # This keeps the transaction-cost treatment consistent with
+    # the return calculation used for completed trades.
+    execution_dates = df.index[df["Execution"].notna()]
+
+    for execution_date in execution_dates:
+        strategy_returns[df.index.get_loc(execution_date)] = (
+            (1.0 + strategy_returns[df.index.get_loc(execution_date)])
+            * (1.0 - transaction_cost)
+            - 1.0
+        )
+
+    df["Strategy_Return"] = strategy_returns
+
+    df["Equity"] = initial_capital * (
+        1.0 + df["Strategy_Return"]
+    ).cumprod()
+
+    df["Benchmark_Return"] = df["Market_Return"]
+
+    df["Benchmark_Equity"] = initial_capital * (
+        1.0 + df["Benchmark_Return"]
+    ).cumprod()
+
+    trades_df = pd.DataFrame(
+        completed_trades,
+        columns=[
+            "Entry_date",
+            "Entry_price",
+            "Exit_price",
+            "Gross_return",
+            "Net_return",
+            "Exit_date"
+        ]
+    )
+
+    trades_df.index.name = "Trade_no"
+
+    # Preserve any position that remains open at the end of the data.
+    open_position = None
+
+    if position == 1 and entry_date is not None:
+        current_price = float(df["Close"].iloc[-1])
+
+        open_position = {
+            "Status": "Open",
+            "Entry_date": pd.Timestamp(entry_date).strftime("%Y-%m-%d"),
+            "Entry_price": float(entry_price),
+            "Current_date": pd.Timestamp(df.index[-1]).strftime("%Y-%m-%d"),
+            "Current_price": current_price,
+            "Unrealized_return": (
+                current_price / entry_price - 1.0
+            ) * 100.0
+        }
+
+    df.attrs["open_position"] = open_position
+
     return df, trades_df
-
-
