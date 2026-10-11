@@ -375,8 +375,34 @@
 
         .run-container {
             display: flex;
-            justify-content: flex-end;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 9px;
             margin-top: 13px;
+        }
+
+        .loading-status {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            color: #93c5fd;
+            font-size: 12px;
+        }
+
+        .loading-status.visible { display: flex; }
+
+        .loading-spinner {
+            width: 13px;
+            height: 13px;
+            border: 2px solid rgba(147, 197, 253, 0.28);
+            border-top-color: #60a5fa;
+            border-radius: 50%;
+            animation: backtest-spin 0.8s linear infinite;
+            flex-shrink: 0;
+        }
+
+        @keyframes backtest-spin {
+            to { transform: rotate(360deg); }
         }
 
         .run-button {
@@ -934,8 +960,14 @@
                     <div class="field">
                         <label for="asset">Asset</label>
                         <select id="asset" name="asset">
-                            <option value="SPY">SPY</option>
-                            <option value="GOLD">GOLD</option>
+                            <option value="SPY" selected>SPY — S&amp;P 500 ETF</option>
+                            <option value="AAPL">AAPL — Apple</option>
+                            <option value="MSFT">MSFT — Microsoft</option>
+                            <option value="NVDA">NVDA — NVIDIA</option>
+                            <option value="AMZN">AMZN — Amazon</option>
+                            <option value="TSLA">TSLA — Tesla</option>
+                            <option value="GOOGL">GOOGL — Alphabet</option>
+                            <option value="META">META — Meta Platforms</option>
                         </select>
                     </div>
 
@@ -976,6 +1008,10 @@
                 </div>
 
                 <div class="run-container">
+                    <div class="loading-status" id="backtest-loading-status" role="status" aria-live="polite">
+                        <span class="loading-spinner" aria-hidden="true"></span>
+                        <span>Running backtest… Please wait a few seconds.</span>
+                    </div>
                     <button type="button" class="run-button" id="run-backtest">
                         ▶ Run Backtest
                     </button>
@@ -1101,7 +1137,7 @@
                         <div class="dashboard-card-header">
                             <div>
                                 <div class="dashboard-card-title">Equity Curve</div>
-                                <div class="dashboard-card-subtitle">Strategy vs. SPY buy-and-hold benchmark</div>
+                                <div class="dashboard-card-subtitle">Strategy vs. selected asset buy-and-hold benchmark</div>
                             </div>
                         </div>
                         <div class="chart-container">
@@ -1226,6 +1262,7 @@
     const capitalUp = document.getElementById("capital-up");
     const capitalDown = document.getElementById("capital-down");
     const runBacktestButton = document.getElementById("run-backtest");
+    const backtestLoadingStatus = document.getElementById("backtest-loading-status");
     const downloadReportButton = document.getElementById("download-report");
     const status = document.getElementById("status");
     const statusText = document.getElementById("status-text");
@@ -1948,7 +1985,7 @@
                         tension: 0.15
                     },
                     {
-                        label: "SPY Buy & Hold",
+                        label: assetSelect.value + " Buy & Hold",
                         data: filteredData.map(item => item.Benchmark_Equity ?? item.benchmark_equity),
                         borderColor: "#1f77b4",
                         backgroundColor: "rgba(31, 119, 180, 0.05)",
@@ -2384,11 +2421,6 @@
         const period = periodSelect.value;
         const initialCapital = Number(capitalInput.value);
 
-        if (assetSelect.value !== "SPY") {
-            statusText.textContent = "GOLD is not supported yet";
-            return;
-        }
-
         if (!Number.isFinite(initialCapital) || initialCapital < 1000) {
             statusText.textContent = "Initial capital must be at least 1,000";
             return;
@@ -2416,8 +2448,10 @@
 
         status.classList.remove("error");
         status.classList.add("running");
-        statusText.textContent = "Running...";
+        statusText.textContent = "Running backtest...";
+        backtestLoadingStatus.classList.add("visible");
         runBacktestButton.disabled = true;
+        runBacktestButton.textContent = "⏳ Running Backtest...";
 
         try {
             const response = await fetch("/run-backtest", {
@@ -2426,7 +2460,7 @@
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify({
-                    asset: assetSelect.value,
+                    ticker: assetSelect.value,
                     period: period,
                     initial_capital: initialCapital,
                     start_date: period === "custom" ? customBacktestStart : null,
@@ -2450,7 +2484,7 @@
             renderRecentTrades(result.recent_trades);
 
             lastSuccessfulBacktest = {
-                asset: assetSelect.value,
+                ticker: assetSelect.value,
                 period: period,
                 initial_capital: initialCapital,
                 start_date: period === "custom" ? customBacktestStart : null,
@@ -2467,12 +2501,14 @@
             console.error("Backtest error:", error);
         } finally {
             runBacktestButton.disabled = false;
+            runBacktestButton.textContent = "▶ Run Backtest";
+            backtestLoadingStatus.classList.remove("visible");
         }
     });
 
     downloadReportButton.addEventListener("click", async function () {
         const params = lastSuccessfulBacktest || {
-            asset: assetSelect.value,
+            ticker: assetSelect.value,
             period: periodSelect.value,
             initial_capital: Number(capitalInput.value),
             start_date: periodSelect.value === "custom" ? customBacktestStart : null,
@@ -2503,7 +2539,7 @@
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
             link.href = url;
-            link.download = "backtest_report.pdf";
+            link.download = `${params.ticker || "SPY"}_backtest_report.pdf`;
             document.body.appendChild(link);
             link.click();
             link.remove();

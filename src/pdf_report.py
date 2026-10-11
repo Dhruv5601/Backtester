@@ -29,12 +29,12 @@ from reportlab.platypus import (
 
 
 # Matplotlib's default color cycle is used consistently across report charts.
-STRATEGY_COLOR = "C0"
-BENCHMARK_COLOR = "C1"
+STRATEGY_COLOR = "#FF7F0E"
+BENCHMARK_COLOR = "#1F77B4"
 ENTRY_COLOR = "C2"
 EXIT_COLOR = "C3"
-STRATEGY_HEX = "#1F77B4"
-BENCHMARK_HEX = "#FF7F0E"
+STRATEGY_HEX = "#FF7F0E"
+BENCHMARK_HEX = "#1F77B4"
 
 NAVY = colors.HexColor("#16324F")
 LIGHT_BLUE = colors.HexColor("#EAF0F6")
@@ -380,8 +380,8 @@ def generate_pdf_report(
     net_profit_gap = strategy_final - benchmark_final
     quick_comparison = Table(
         [[
-            Paragraph(f'<b>STRATEGY NET PROFIT</b><br/><font color="#1F77B4">${strategy_final - initial_capital:,.2f}</font>', note_style),
-            Paragraph(f'<b>BENCHMARK NET PROFIT</b><br/><font color="#FF7F0E">${benchmark_final - initial_capital:,.2f}</font>', note_style),
+            Paragraph(f'<b>STRATEGY NET PROFIT</b><br/><font color="#FF7F0E">${strategy_final - initial_capital:,.2f}</font>', note_style),
+            Paragraph(f'<b>BENCHMARK NET PROFIT</b><br/><font color="#1F77B4">${benchmark_final - initial_capital:,.2f}</font>', note_style),
             Paragraph(f'<b>ENDING EQUITY GAP</b><br/><font color="#16324F">${net_profit_gap:+,.2f}</font>', note_style),
         ]],
         colWidths=[content_width / 3] * 3,
@@ -457,8 +457,8 @@ def generate_pdf_report(
     )
     _style_table(performance_table)
     performance_table.setStyle(TableStyle([
-        ("TEXTCOLOR", (1, 1), (1, -1), colors.HexColor("#1F77B4")),
-        ("TEXTCOLOR", (2, 1), (2, -1), colors.HexColor("#FF7F0E")),
+        ("TEXTCOLOR", (1, 1), (1, -1), colors.HexColor("#FF7F0E")),
+        ("TEXTCOLOR", (2, 1), (2, -1), colors.HexColor("#1F77B4")),
     ]))
     story.append(performance_table)
     story.append(Spacer(1, 4 * mm))
@@ -527,12 +527,12 @@ def generate_pdf_report(
     dd_period_table = Table([
         [
             Paragraph(
-                f'<font color="#1F77B4"><b>STRATEGY WORST DRAWDOWN</b></font><br/>'
+                f'<font color="#FF7F0E"><b>STRATEGY WORST DRAWDOWN</b></font><br/>'
                 f'{strat_worst:.2f}% · Peak {strat_peak:%Y-%m-%d} → Trough {strat_trough:%Y-%m-%d}',
                 note_style,
             ),
             Paragraph(
-                f'<font color="#FF7F0E"><b>BENCHMARK WORST DRAWDOWN</b></font><br/>'
+                f'<font color="#1F77B4"><b>BENCHMARK WORST DRAWDOWN</b></font><br/>'
                 f'{bench_worst:.2f}% · Peak {bench_peak:%Y-%m-%d} → Trough {bench_trough:%Y-%m-%d}',
                 note_style,
             ),
@@ -772,8 +772,8 @@ def generate_pdf_report(
             ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
             ("ALIGN", (0, 0), (0, -1), "LEFT"),
             ("ALIGN", (2, 0), (2, -1), "LEFT"),
-            ("TEXTCOLOR", (4, 1), (4, -1), colors.HexColor("#1F77B4")),
-            ("TEXTCOLOR", (5, 1), (5, -1), colors.HexColor("#FF7F0E")),
+            ("TEXTCOLOR", (4, 1), (4, -1), colors.HexColor("#FF7F0E")),
+            ("TEXTCOLOR", (5, 1), (5, -1), colors.HexColor("#1F77B4")),
             ("FONTSIZE", (0, 0), (-1, -1), 6.8),
             ("LEFTPADDING", (0, 0), (-1, -1), 3),
             ("RIGHTPADDING", (0, 0), (-1, -1), 3),

@@ -1,28 +1,50 @@
 import yfinance as yf
 import pandas as pd
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
 
-def download_data(period='10y', start=None, end=None):
+def download_data(period="10y", start=None, end=None, ticker="SPY"):
+    ticker = ticker.strip().upper() if isinstance(ticker, str) else ""
+
+    if not ticker:
+        raise ValueError("Please enter a valid stock ticker.")
+
+    download_args = {
+        "tickers": ticker,
+        "interval": "1d",
+        "auto_adjust": False,
+        "progress": False,
+        "multi_level_index": False,
+    }
+
     if start is not None and end is not None:
         start_date = date.fromisoformat(start)
         end_date = date.fromisoformat(end)
 
         if start_date > end_date:
-            raise ValueError("Start date must be on or before the end date.")
+            raise ValueError(
+                "Start date must be on or before the end date."
+            )
 
         if end_date > date.today():
             raise ValueError("End date cannot be in the future.")
 
-        download_end = (end_date + timedelta(days=1)).isoformat()
-
-        df = yf.download('SPY',start=start_date.isoformat(),end=download_end,interval='1d',auto_adjust=False,progress=False)
+        download_args["start"] = start_date.isoformat()
+        download_args["end"] = (
+            end_date + timedelta(days=1)
+        ).isoformat()
     else:
-        df = yf.download('SPY',period=period,interval='1d',auto_adjust=False,progress=False)
+        download_args["period"] = period
+
+    df = yf.download(**download_args)
 
     if df.empty:
-        return df
+        raise ValueError(
+            f"No market data was returned for {ticker}. "
+            "Check the ticker symbol and selected date range."
+        )
 
+    # Handle MultiIndex columns across yfinance versions.
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
 
@@ -30,18 +52,25 @@ def download_data(period='10y', start=None, end=None):
     return df
 
 
-def validate_data(df):
+def validate_data(df, ticker="SPY"):
     if df is None or df.empty:
         raise ValueError(
-            "No market data was returned for the selected date range. "
-            "Choose a wider range with available SPY trading data."
+            f"No market data is available for {ticker}. "
+            "Check the ticker and select a wider date range."
         )
 
-    cols_list = ['Open', 'High', 'Low', 'Close', 'Volume']
-    missing_list = [col for col in cols_list if col not in df.columns]
+    required_columns = ["Open", "High", "Low", "Close", "Volume"]
+    missing_columns = [
+        col for col in required_columns if col not in df.columns
+    ]
 
-    if missing_list:
-        raise KeyError(f"Missing required columns: {missing_list}")
+    if missing_columns:
+        raise ValueError(
+            f"Missing required market data columns: {missing_columns}"
+        )
+
+    if not isinstance(df.index, pd.DatetimeIndex):
+        raise ValueError("Market data must have a datetime index.")
 
     today = date.today()
 
@@ -54,48 +83,49 @@ def validate_data(df):
         )
 
     if df.isna().any().any():
-        ndf = df[df.isna().any(axis=1)]
-        na_index = ndf.index[0].strftime('%Y-%m-%d')
-        na_cols = ndf.columns[ndf.iloc[0].isna()].tolist()
+        missing_rows = df[df.isna().any(axis=1)]
+        first_row = missing_rows.iloc[0]
+        first_date = missing_rows.index[0].strftime("%Y-%m-%d")
+        missing_cols = first_row[first_row.isna()].index.tolist()
 
         raise ValueError(
-            f"Missing values detected in {len(ndf)} row(s). "
-            f"First occurrence: {na_index}; columns: {na_cols}"
+            f"Missing values detected in {len(missing_rows)} row(s). "
+            f"First occurrence: {first_date}; columns: {missing_cols}"
         )
 
-    if df.index.duplicated().any():
-        dup_dates = (
+    if df.index.has_duplicates:
+        duplicate_dates = (
             df.index[df.index.duplicated(keep=False)]
-            .strftime('%Y-%m-%d')
+            .strftime("%Y-%m-%d")
             .unique()
             .tolist()
         )
-        raise ValueError(f"Duplicate dates detected: {dup_dates}")
+        raise ValueError(
+            f"Duplicate dates detected: {duplicate_dates}"
+        )
 
-    invalid_high_open = df['High'] < df['Open']
-    invalid_high_close = df['High'] < df['Close']
-    invalid_low_open = df['Low'] > df['Open']
-    invalid_low_close = df['Low'] > df['Close']
+    if not df.index.is_monotonic_increasing:
+        raise ValueError("Market data dates must be in ascending order.")
 
-    if invalid_high_open.any():
+    if (df["High"] < df["Open"]).any():
         raise ValueError("Invalid market data: High is below Open.")
 
-    if invalid_high_close.any():
+    if (df["High"] < df["Close"]).any():
         raise ValueError("Invalid market data: High is below Close.")
 
-    if invalid_low_open.any():
+    if (df["Low"] > df["Open"]).any():
         raise ValueError("Invalid market data: Low is above Open.")
 
-    if invalid_low_close.any():
+    if (df["Low"] > df["Close"]).any():
         raise ValueError("Invalid market data: Low is above Close.")
 
-    price_columns = ['Open', 'High', 'Low', 'Close']
+    price_columns = ["Open", "High", "Low", "Close"]
 
     if (df[price_columns] <= 0).any().any():
         raise ValueError("Invalid market data: prices must be positive.")
 
-    if (df['Volume'] <= 0).any():
-        raise ValueError("Invalid market data: volume must be positive.")
+    if (df["Volume"] < 0).any():
+        raise ValueError("Invalid market data: volume cannot be negative.")
 
     return True
 
