@@ -291,3 +291,4 @@ def calculate_trade_statistics(trades_df):
     }
 
     return dict2, trade_performance
+

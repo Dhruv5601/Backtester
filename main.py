@@ -5,6 +5,7 @@ from src import backtester
 from src import performance
 from src import visualization
 from src import data
+from src.pdf_report import generate_pdf_report
 
 
 def run_backtest(period='10y', initial_capital=100000, start_date=None, end_date=None):
@@ -108,5 +109,17 @@ def run_backtest(period='10y', initial_capital=100000, start_date=None, end_date
 
 if __name__ == "__main__":
     df, trades_df, performance_report, trade_stats_df, trade_performance = (
-        run_backtest(period='5y', initial_capital=50000)
+        run_backtest(period='10y', initial_capital=100000)
+    )
+    
+    generate_pdf_report(
+        "backtest_report.pdf",
+        "SPY",
+        df.index.min().date(),
+        df.index.max().date(),
+        100000,
+        performance_report,
+        trade_stats_df,
+        trades_df,
+        df
     )

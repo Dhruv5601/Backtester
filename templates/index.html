@@ -413,6 +413,29 @@
 
         .results-section.visible { display: block; }
 
+        .report-button {
+            min-height: 36px;
+            padding: 0 13px;
+            border: 1px solid #428cf1;
+            border-radius: 5px;
+            background: #12283f;
+            color: #dbeafe;
+            font: inherit;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .report-button:hover:not(:disabled) {
+            background: #1b3b5c;
+        }
+
+        .report-button:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
         .results-header {
             display: flex;
             align-items: center;
@@ -473,7 +496,7 @@
             color: #edf3f8;
         }
 
-        .metric-value.strategy { color: #5ee19a; }
+        .metric-value.strategy { color: #edf3f8; }
 
         .metric-value.benchmark {
             font-size: 11px;
@@ -968,6 +991,9 @@
                                 Strategy performance compared with the benchmark.
                             </div>
                         </div>
+                        <button type="button" class="report-button" id="download-report" disabled>
+                            ↓ Download PDF Report
+                        </button>
                     </div>
 
                     <div class="results-grid">
@@ -1200,6 +1226,7 @@
     const capitalUp = document.getElementById("capital-up");
     const capitalDown = document.getElementById("capital-down");
     const runBacktestButton = document.getElementById("run-backtest");
+    const downloadReportButton = document.getElementById("download-report");
     const status = document.getElementById("status");
     const statusText = document.getElementById("status-text");
     const tradeRangeSelect = document.getElementById("trade-range");
@@ -1250,6 +1277,7 @@
     let previousTradeRange = tradeRangeSelect.value;
     let equityChart = null;
     let drawdownChart = null;
+    let lastSuccessfulBacktest = null;
 
     /* DATE HELPERS */
 
@@ -1719,6 +1747,9 @@
                 getPerformanceValue(performance, "Max drawdown", "Benchmark") ??
                 getPerformanceValue(performance, "Max Drawdown", "Benchmark")
             );
+        
+        resultElements.strategyMaxDrawdown.style.color = "#fb7185";
+        resultElements.benchmarkMaxDrawdown.style.color = "#fb7185";
 
         resultElements.strategySharpe.textContent =
             formatRatio(getPerformanceValue(performance, "Sharpe Ratio", "Strategy"));
@@ -1910,8 +1941,8 @@
                     {
                         label: "Strategy Equity",
                         data: filteredData.map(item => item.Equity ?? item.equity),
-                        borderColor: "#3b82f6",
-                        backgroundColor: "rgba(59, 130, 246, 0.08)",
+                        borderColor: "#ff7f0e",
+                        backgroundColor: "rgba(255, 127, 14, 0.08)",
                         borderWidth: 2,
                         pointRadius: 0,
                         tension: 0.15
@@ -1919,8 +1950,8 @@
                     {
                         label: "SPY Buy & Hold",
                         data: filteredData.map(item => item.Benchmark_Equity ?? item.benchmark_equity),
-                        borderColor: "#94a3b8",
-                        backgroundColor: "rgba(148, 163, 184, 0.05)",
+                        borderColor: "#1f77b4",
+                        backgroundColor: "rgba(31, 119, 180, 0.05)",
                         borderWidth: 1.5,
                         pointRadius: 0,
                         tension: 0.15
@@ -1988,8 +2019,8 @@
                     {
                         label: "Strategy Drawdown",
                         data: filteredData.map(item => item.Drawdown ?? item.drawdown),
-                        borderColor: "#fb7185",
-                        backgroundColor: "rgba(251, 113, 133, 0.12)",
+                        borderColor: "#ff7f0e",
+                        backgroundColor: "rgba(255, 127, 14, 0.12)",
                         fill: true,
                         borderWidth: 1.5,
                         pointRadius: 0,
@@ -1998,8 +2029,8 @@
                     {
                         label: "Benchmark Drawdown",
                         data: filteredData.map(item => item.Benchmark_Drawdown ?? item.benchmark_drawdown),
-                        borderColor: "#94a3b8",
-                        backgroundColor: "rgba(148, 163, 184, 0.04)",
+                        borderColor: "#1f77b4",
+                        backgroundColor: "rgba(31, 119, 180, 0.04)",
                         fill: false,
                         borderWidth: 1.2,
                         pointRadius: 0,
@@ -2195,25 +2226,8 @@
             return;
         }
 
-        const labels = [
-            "Total Trades",
-            "Winning Trades",
-            "Losing Trades",
-            "Win Rate",
-            "Average Win",
-            "Average Loss",
-            "Best Trade",
-            "Worst Trade"
-        ];
-
-        const selectedRows = rows.filter(function (row) {
-            return labels.some(label =>
-                String(row.label).toLowerCase().includes(label.toLowerCase())
-            );
-        });
-
-        const displayRows = selectedRows.length ? selectedRows : rows;
-
+        const displayRows = rows;
+        
         if (
             displayRows.length === 1 &&
             Number(displayRows[0].value) === 0 &&
@@ -2240,13 +2254,31 @@
                 );
             }
 
-            const className = Number.isFinite(numericValue)
-                ? numericValue > 0
+            const label = String(row.label).toLowerCase();
+
+            let className = "";
+
+            if (
+                label.includes("average loss") ||
+                label.includes("worst trade") ||
+                label.includes("losing trades") ||
+                label.includes("max drawdown")
+            ) {
+                className = "negative";
+            } else if (
+                label.includes("average win") ||
+                label.includes("best trade") ||
+                label.includes("winning trades") ||
+                label.includes("win rate")
+            ) {
+                className = "positive";
+            } else if (Number.isFinite(numericValue)) {
+                className = numericValue > 0
                     ? "positive"
                     : numericValue < 0
                         ? "negative"
-                        : ""
-                : "";
+                        : "";
+            }
 
             return `
                 <div class="trade-stat">
@@ -2417,6 +2449,15 @@
             renderTradeAnalysis(result.trade_stats);
             renderRecentTrades(result.recent_trades);
 
+            lastSuccessfulBacktest = {
+                asset: assetSelect.value,
+                period: period,
+                initial_capital: initialCapital,
+                start_date: period === "custom" ? customBacktestStart : null,
+                end_date: period === "custom" ? customBacktestEnd : null
+            };
+            downloadReportButton.disabled = false;
+
             status.classList.remove("running", "error");
             statusText.textContent = "Complete";
         } catch (error) {
@@ -2427,6 +2468,62 @@
         } finally {
             runBacktestButton.disabled = false;
         }
+    });
+
+    downloadReportButton.addEventListener("click", async function () {
+        const params = lastSuccessfulBacktest || {
+            asset: assetSelect.value,
+            period: periodSelect.value,
+            initial_capital: Number(capitalInput.value),
+            start_date: periodSelect.value === "custom" ? customBacktestStart : null,
+            end_date: periodSelect.value === "custom" ? customBacktestEnd : null
+        };
+
+        downloadReportButton.disabled = true;
+        const originalText = downloadReportButton.textContent;
+        downloadReportButton.textContent = "Generating PDF...";
+
+        try {
+            const response = await fetch("/download-report", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(params)
+            });
+
+            if (!response.ok) {
+                let message = "PDF report generation failed.";
+                try {
+                    const errorData = await response.json();
+                    message = errorData.error || message;
+                } catch (_) {}
+                throw new Error(message);
+            }
+
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "backtest_report.pdf";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            status.classList.add("error");
+            statusText.textContent = error.message;
+        } finally {
+            downloadReportButton.textContent = originalText;
+            downloadReportButton.disabled = false;
+        }
+    });
+
+    [assetSelect, periodSelect, capitalInput, tradeRangeSelect].forEach(element => {
+        element.addEventListener("change", function () {
+            if (lastSuccessfulBacktest) {
+                downloadReportButton.disabled = true;
+                downloadReportButton.title = "Run the backtest again to generate a report for the new settings.";
+            }
+        });
     });
 
     /* INITIAL STATE */

@@ -1,5 +1,7 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_file
+from io import BytesIO
 from main import run_backtest
+from src.pdf_report import generate_pdf_report
 from src import visualization
 import pandas as pd
 import numpy as np
@@ -209,6 +211,82 @@ def run_backtest_route():
                 "The backtest could not be completed. "
                 "Check the selected dates and server log for details."
             )
+        }), 500
+
+
+@app.route("/download-report", methods=["POST"])
+def download_report_route():
+    try:
+        data = request.get_json()
+        if not isinstance(data, dict):
+            return jsonify({"success": False, "error": "Invalid request data."}), 400
+
+        asset = data.get("asset", "SPY")
+        if asset != "SPY":
+            return jsonify({
+                "success": False,
+                "error": "Only SPY is currently supported by the backtest engine."
+            }), 400
+
+        period = data.get("period", "5y")
+        initial_capital = float(data.get("initial_capital", 100000))
+        start_date = data.get("start_date")
+        end_date = data.get("end_date")
+
+        if not np.isfinite(initial_capital) or initial_capital <= 0:
+            return jsonify({"success": False, "error": "Initial capital must be a positive number."}), 400
+
+        if period == "custom":
+            if not start_date or not end_date:
+                return jsonify({"success": False, "error": "Start date and end date are required for a custom backtest."}), 400
+            if start_date >= end_date:
+                return jsonify({"success": False, "error": "End date must be after the start date."}), 400
+
+        (
+            df,
+            trades_df,
+            performance_report,
+            trade_stats_df,
+            trade_performance
+        ) = run_backtest(
+            period=period,
+            initial_capital=initial_capital,
+            start_date=start_date if period == "custom" else None,
+            end_date=end_date if period == "custom" else None
+        )
+
+        start = df.index.min().date()
+        end = df.index.max().date()
+        pdf_buffer = BytesIO()
+
+        generate_pdf_report(
+            pdf_buffer,
+            asset,
+            start,
+            end,
+            initial_capital,
+            performance_report,
+            trade_stats_df,
+            trades_df,
+            df
+        )
+        pdf_buffer.seek(0)
+
+        filename = f"{asset}_backtest_report_{start}_{end}.pdf"
+        return send_file(
+            pdf_buffer,
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=filename
+        )
+
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except Exception:
+        app.logger.exception("PDF report generation failed")
+        return jsonify({
+            "success": False,
+            "error": "The PDF report could not be generated. Check the server log for details."
         }), 500
 
 
