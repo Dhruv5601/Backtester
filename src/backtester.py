@@ -6,6 +6,20 @@ def run_backtest(df, initial_capital=100000):
     transaction_cost = 0.0005
     df = df.copy()
 
+    if df.empty:
+        raise ValueError("No market data available for backtesting.")
+
+    required_columns = {"Open", "Close", "Signal"}
+    missing = required_columns.difference(df.columns)
+
+    if missing:
+        raise ValueError(
+            f"Market data is missing required columns: {sorted(missing)}"
+        )
+
+    if initial_capital <= 0:
+        raise ValueError("Initial capital must be greater than zero.")
+
     df["Market_Return"] = df["Close"].pct_change().fillna(0.0)
     df["Strategy_Return"] = 0.0
     df["Execution"] = np.nan
@@ -18,90 +32,97 @@ def run_backtest(df, initial_capital=100000):
 
     strategy_returns = np.zeros(len(df), dtype=float)
 
-    # Execute signals at the next trading day's open.
-    # The final day's signal cannot execute because there is no next day.
-    for i in range(len(df) - 1):
-        signal = int(df["Signal"].iloc[i])
+    # Signals generated at a close execute at the following day's open.
+    # Returns reflect only the price movements during which the strategy
+    # actually holds the position.
 
-        execution_idx = i + 1
-        execution_date = df.index[execution_idx]
-        execution_price = df["Open"].iloc[execution_idx]
+    for i in range(1, len(df)):
+        previous_signal = int(df["Signal"].iloc[i - 1])
 
-        if pd.isna(execution_price) or execution_price <= 0:
-            continue
+        previous_close = float(df["Close"].iloc[i - 1])
+        current_open = df["Open"].iloc[i]
+        current_close = float(df["Close"].iloc[i])
 
-        execution_price = float(execution_price)
-
-        # Enter a long position.
-        if signal == 1 and position == 0:
-            position = 1
-            entry_date = execution_date
-            entry_price = execution_price
-
-            df.loc[execution_date, "Execution"] = entry_price
-
-            # Charge entry transaction cost.
-            strategy_returns[execution_idx] -= transaction_cost
-
-        # Exit a long position.
-        elif signal == -1 and position == 1:
-            exit_date = execution_date
-            exit_price = execution_price
-
-            df.loc[execution_date, "Execution"] = exit_price
-
-            gross_return = exit_price / entry_price - 1.0
-
-            net_return = (
-                (1.0 - transaction_cost)
-                * (1.0 + gross_return)
-                * (1.0 - transaction_cost)
-                - 1.0
+        if not np.isfinite(current_close) or current_close <= 0:
+            raise ValueError(
+                f"Invalid closing price at {df.index[i]}."
             )
 
-            completed_trades.append({
-                "Entry_date": entry_date,
-                "Entry_price": entry_price,
-                "Exit_price": exit_price,
-                "Gross_return": gross_return,
-                "Net_return": net_return,
-                "Exit_date": exit_date
-            })
+        # Default to holding the existing position overnight and
+        # throughout the current session.
+        if position == 1:
+            if previous_close <= 0:
+                raise ValueError(
+                    f"Invalid previous closing price at {df.index[i - 1]}."
+                )
 
-            position = 0
-            entry_date = None
-            entry_price = None
+            daily_factor = current_close / previous_close
+        else:
+            daily_factor = 1.0
 
-            # Charge exit transaction cost.
-            strategy_returns[execution_idx] -= transaction_cost
-
-    # Calculate the daily returns from the position held during
-    # each close-to-close interval, using the previous day's signal.
-    held_position = 0
-
-    for i in range(len(df)):
-        if i > 0:
-            previous_signal = int(df["Signal"].iloc[i - 1])
-
-            if previous_signal == 1 and held_position == 0:
-                held_position = 1
-            elif previous_signal == -1 and held_position == 1:
-                held_position = 0
-
-        if held_position == 1:
-            strategy_returns[i] += float(df["Market_Return"].iloc[i])
-
-    # Apply entry and exit costs multiplicatively on execution dates.
-    # This keeps the transaction-cost treatment consistent with
-    # the return calculation used for completed trades.
-    execution_dates = df.index[df["Execution"].notna()]
-
-    for execution_date in execution_dates:
-        strategy_returns[df.index.get_loc(execution_date)] = (
-            (1.0 + strategy_returns[df.index.get_loc(execution_date)])
-            * (1.0 - transaction_cost)
-            - 1.0
+        # An invalid open prevents execution at today's open.
+        valid_open = (
+            pd.notna(current_open)
+            and np.isfinite(float(current_open))
+            and float(current_open) > 0
         )
+
+        if valid_open:
+            current_open = float(current_open)
+
+            # Enter at today's open.
+            if previous_signal == 1 and position == 0:
+                position = 1
+                entry_date = df.index[i]
+                entry_price = current_open
+
+                df.loc[df.index[i], "Execution"] = entry_price
+
+                # No overnight return before entry.
+                # Apply entry cost once, then capture open-to-close return.
+                daily_factor = (
+                    (1.0 - transaction_cost)
+                    * (current_close / current_open)
+                )
+
+            # Exit at today's open.
+            elif previous_signal == -1 and position == 1:
+                exit_date = df.index[i]
+                exit_price = current_open
+
+                df.loc[df.index[i], "Execution"] = exit_price
+
+                gross_return = exit_price / entry_price - 1.0
+
+                net_return = (
+                    (1.0 - transaction_cost)
+                    * (exit_price / entry_price)
+                    * (1.0 - transaction_cost)
+                    - 1.0
+                )
+
+                completed_trades.append({
+                    "Entry_date": entry_date,
+                    "Entry_price": entry_price,
+                    "Exit_price": exit_price,
+                    "Gross_return": gross_return,
+                    "Net_return": net_return,
+                    "Exit_date": exit_date
+                })
+
+                # Capture the overnight return up to the exit price,
+                # then charge the exit cost once.
+                daily_factor = (
+                    (current_open / previous_close)
+                    * (1.0 - transaction_cost)
+                )
+
+                position = 0
+                entry_date = None
+                entry_price = None
+
+        # Convert the daily growth factor into a daily return.
+        strategy_returns[i] = daily_factor - 1.0
 
     df["Strategy_Return"] = strategy_returns
 

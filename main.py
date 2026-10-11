@@ -58,19 +58,15 @@ def run_backtest(
             "Select a wider range."
         )
 
+    # Calculate indicators and signals using warm-up data.
     strategy.calculate_moving_averages(df)
     strategy.generate_signals(df)
-    strategy.generate_positions(df)
-
-    df, trades_df = backtester.run_backtest(
-        df,
-        initial_capital=initial_capital
-    )
 
     if period == "custom":
         start_timestamp = pd.Timestamp(custom_start)
         end_timestamp = pd.Timestamp(custom_end)
 
+        # Restrict the actual backtest to the selected dates.
         df = df.loc[
             (df.index >= start_timestamp) &
             (df.index <= end_timestamp)
@@ -82,32 +78,14 @@ def run_backtest(
                 "Choose a wider range."
             )
 
-        df["Strategy_Return"] = df["Strategy_Return"].fillna(0)
-        df["Benchmark_Return"] = df["Benchmark_Return"].fillna(0)
+    # Start position tracking from the beginning of the
+    # actual backtest period, not the warm-up period.
+    strategy.generate_positions(df)
 
-        df.iloc[0, df.columns.get_loc("Benchmark_Return")] = 0
-
-        df["Equity"] = initial_capital * (
-            1 + df["Strategy_Return"]
-        ).cumprod()
-
-        df["Benchmark_Equity"] = initial_capital * (
-            1 + df["Benchmark_Return"]
-        ).cumprod()
-
-        if not trades_df.empty:
-            trades_df["Entry_date"] = pd.to_datetime(
-                trades_df["Entry_date"]
-            )
-            trades_df["Exit_date"] = pd.to_datetime(
-                trades_df["Exit_date"]
-            )
-
-            trades_df = trades_df.loc[
-                (trades_df["Entry_date"] <= end_timestamp) &
-                (trades_df["Exit_date"] >= start_timestamp) &
-                (trades_df["Exit_date"] <= end_timestamp)
-            ].copy()
+    df, trades_df = backtester.run_backtest(
+        df,
+        initial_capital=initial_capital
+    )
 
     performance_report = performance.calculate_performance(
         df,
@@ -131,6 +109,7 @@ def run_backtest(
         trade_stats_df,
         trade_performance
     )
+
 
 if __name__ == "__main__":
     results = run_backtest(
